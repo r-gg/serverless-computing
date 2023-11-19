@@ -176,6 +176,8 @@ invoke.py init helloPython.zip
 wski action create hello --docker rggg1/python11action helloPython.zip
 ```
 
+**The above steps are automated in  `create-zip.sh` and `deploy-python-action`** 
+
 **it might take a while on the first start**
 ```
 wski action invoke hello --result
