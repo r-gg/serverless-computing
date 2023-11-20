@@ -183,7 +183,12 @@ wski action create hello --docker rggg1/python11action helloPython.zip
 wski action invoke hello --result
 ```
 
+# Kafka
 
+In a kafka pod by openwhisk:
+```
+root@owdev-kafka-0:/opt/kafka/bin# ./kafka-topics.sh --zookeper=localhost:9092 --list
+```
 
 
 # Misc
