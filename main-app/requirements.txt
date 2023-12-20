@@ -1,5 +1,7 @@
 flask
+pandas
 minio
 kafka-python
 scikit-learn
 numpy
+requests
