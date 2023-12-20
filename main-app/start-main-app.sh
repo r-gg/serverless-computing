@@ -41,7 +41,7 @@ tmux send-keys -t $SESSION:App 'kubectl rollout status deployment main-app -n ma
 
 echo "Deployment attempt finished, forwarding pod port 5000 to localhost:5000"
 
-tmux send-keys -t $SESSION:App 'kubectl port-forward -n main-app main-app-84c55f5ffd-kdfvg 5000:5000' C-m
+tmux send-keys -t $SESSION:App 'kubectl port-forward -n main-app $(kubectl get pods -n main-app | tail -n +2 | awk '\''{print $1; exit}'\'') 5000:5000' C-m
 
 
 tmux attach-session -t $SESSION:0

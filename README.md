@@ -1,3 +1,10 @@
+# TODOs for serverless computing
+
+- create a designated kafka topic in main-app for communication with the activations.
+- add model training in actions
+- add notifying kafka in actions
+- add model aggregation in aggregator
+
 # Openwhisk setup
 
 ## Deploy the kubernetes cluster with kind
@@ -156,12 +163,12 @@ docker tag <image-id-of action-python-v3.11:1.0-SNAPSHOT> python11action
 
 Start the container where the action will be placed
 ```
-docker run --name p11runtime --rm -v "$PWD:/tmp" python11action
+docker run --name p11runtime --rm -v "$PWD:/mounty" rggg1/python11action
 ```
 
 Exec the command to create the venv
 ```
-docker exec -it p11runtime bash -c "cd tmp && virtualenv virtualenv && source virtualenv/bin/activate && pip install -r requirements.txt"
+docker exec -it p11runtime bash -c "cd mounty && virtualenv virtualenv && source virtualenv/bin/activate && pip install -r requirements.txt"
 ```
 
 Stop the test container used for creating the venv.
