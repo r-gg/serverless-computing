@@ -1,0 +1,100 @@
+1  ls                                                                                        
+    2  python                                                                                    
+    3  ls                                                                                        
+    4  cp app.py app1.py                                                                         
+    5  ls                                                                                        
+    6  vim app1.py                                                                               
+    7  apt-get app1.py                                                                           
+    8  apt-get vim                                                                               
+    9  apt-get install vim                                                                       
+   10  apt-get update                                                                            
+   11  apt-get install vim                                                                       
+   12  vim app1.py                                                                               
+   13  ls                                                                                        
+   14  git                                                                                       
+   15  git clone https://github.com/apache/kafka.git kafka                                       
+   16  ls                                                                                        
+   17  cd kafka/                                                                                 
+   18  ls                                                                                        
+   19  cd bin/                                                                                   
+   20  ls                                                                                        
+   21  ./kafka-topics.sh --zookeper=localhost:9092 --list                                        
+   22  cd ..                                                                                     
+   23  ls                                                                                        
+   24  ./gradlew jar -PscalaVersion=2.13.12                                                      
+   25  cd ..                                                                                     
+   26  rm -rf kafka/                                                                             
+   27  wget "https://dlcdn.apache.org/kafka/3.6.0/kafka_2.13-3.6.0.tgz"                          
+   28  tar -xzf kafka_2.13-3.6.0.tgz                                                             
+   29  ls                                                                                        
+   30  cd kafka_2.13-3.6.0                                                                       
+   31  ls                                                                                        
+   32  cd bin/                                                                                   
+   33  ls                                                                                        
+   34  ./kafka-topics.sh --zookeeper=owdev-zookeeper.openwhisk:2181 --list                       
+   35  java                                                                                      
+   36  apt-get install java                                                                      
+   37  apt-get update                                                                            
+   38  cd ..                                                                                     
+   39  cd ..                                                                                     
+   40  wget "https://javadl.oracle.com/webapps/download/AutoDL?BundleId=249190_b291ca3e0c8548b5a5
+1d5a5f50063037"                                                                                  
+   41  cd /usr                                                                                   
+   42  mkdir java                                                                                
+   43  cd java/                                                                                  
+   44  ls /app/                                                                                  
+   45  cd /app/                                                                                  
+   46  rm AutoDL\?BundleId\=249190_b291ca3e0c8548b5a51d5a5f50063037                              
+   47  ls                                                                                        
+   48  gradle                                                                                    
+   49  java                                                                                      
+   50  wget "https://javadl.oracle.com/webapps/download/AutoDL?BundleId=249190_b291ca3e0c8548b5a5
+1d5a5f50063037"                                                                                  
+   51  mv AutoDL\?BundleId\=249190_b291ca3e0c8548b5a51d5a5f50063037 jar.tar.gz                   
+   52  ls                                                                                        
+   53  mv jar.tar.gz /usr/java/                                                                  
+   54  cd /usr/java/                                                                             
+   55  tar zxvf jar.tar.gz                                                                       
+   56  ls                                                                                        
+   57  rm jar.tar.gz                                                                             
+   58  java                                                                                      
+   59  sudo apt install default-jre                                                              
+   60  apt install default-jre                                    
+   61  java --version
+   62  sdk
+   63  dnf
+   64  sudo dnf
+   65  apt search gradle | less
+   66  apt search gradle 
+   67  apt search gradle | less
+   68  apt install less
+   69  apt search gradle | less
+   70  apt install gradle
+   71  cd /app/
+   72  ls
+   73  cd kafka_2.13-3.6.0
+   74  ls
+   75  cd bin/
+   76  ./kafka-topics.sh --zookeeper=owdev-zookeeper.openwhisk:2181 --list
+   77  ./kafka-topics.sh --list
+   78  ./kafka-topics.sh --bootstrap-server=owdev-zookeeper.openwhisk:2181 --list
+   79  ./kafka-topics.sh --bootstrap-server=kafkica.default.cluster.local:9092 --list
+   80  ./kafka-topics.sh --bootstrap-server=kafkica.default.svc.cluster.local:9092 --list
+   81  ./kafka-topics.sh --bootstrap-server=kafkica.default.svc.cluster.local:9092 --list --help
+   82  ./kafka-topics.sh --bootstrap-server=kafkica.default.svc.cluster.local:9092 --list --help 
+| less
+   83  ./kafka-topics.sh --bootstrap-server=kafkica.default.svc.cluster.local:9092 --list --help 
+| less
+   84  ./kafka-topics.sh --bootstrap-server=kafkica.default.svc.cluster.local:9092 --list
+   85  ./kafka-topics.sh --bootstrap-server=kafkica.default.svc.cluster.local:9092 --list
+   86  ./kafka-topics.sh --bootstrap-server=kafkica.default.svc.cluster.local:9091 --list
+   87  ./kafka-topics.sh --bootstrap-server=kafkica.default.svc.cluster.local:9091 --list
+   88  ls
+   89  ./zookeeper-shell.sh 
+   90  ./zookeeper-shell.sh owdev-zookeeper.openwhisk:2181
+   91  ./zookeeper-shell.sh owdev-zookeeper.openwhisk:2181
+   92  history
+   93  ls
+   94  history
+   95  history
+

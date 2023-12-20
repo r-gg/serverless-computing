@@ -71,9 +71,10 @@ while [ "$INSTALLFINISHED" = "" ]
 do
     echo "."
     sleep 30
+    INSTALLFINISHED=$(kubectl get pods -n openwhisk | grep "install-packages.*Completed")
 done
 
 echo "openwhisk install finished"
-
+echo -en "\007"
 # Attach session, on the Main window
 tmux attach-session -t $SESSION:0

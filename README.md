@@ -123,7 +123,11 @@ kubectl run curl --image=radial/busyboxplus:curl -i --tty --rm
 
 ## Create access key in minio dashboard
 
-Access Keys > create access key
+Access Keys > create access key (not easy to automate 💀)
+ 
+Maybe create bucket in main app and allow anonymous access to the created bucket (preferrably programatically : this is the only fn in minio python client that is close enough https://min.io/docs/minio/linux/developers/python/API.html#set-bucket-policy-bucket-name-policy ):
+![Alt text](image.png)
+
 
 # Installing `requirements.txt` when deploying python actions
 
@@ -188,6 +192,58 @@ wski action invoke hello --result
 In a kafka pod by openwhisk:
 ```
 root@owdev-kafka-0:/opt/kafka/bin# ./kafka-topics.sh --zookeper=localhost:9092 --list
+
+root@owdev-kafka-0:/# ./kafka-topics.sh --zookeeper=owdev-zookeeper.openwhisk:2181 --list
+
+
+```
+
+## Label pod so that it can be exposed as a service
+
+```
+kubectl label pod -n openwhisk owdev-kafka-0 application=kafka
+```
+
+Then use following yaml to create a service:
+```
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafkica
+  labels:
+    application: kafka
+spec:
+  ports:
+  - port: 9092
+    protocol: TCP
+  selector:
+    application: kafka
+```
+
+it will expose the pod port 9092 
+
+## In a main-app pod
+
+get the kafka tar and extract it
+
+```
+wget "https://dlcdn.apache.org/kafka/3.6.0/kafka_2.13-3.6.0.tgz"
+
+tar -xzf kafka_2.13-3.6.0.tgz
+
+cd kafka_2.13-3.6.0
+```
+
+Access zookeeper
+
+```
+root@main-app-84c55f5ffd-gjvvr:/app/kafka_2.13-3.6.0/bin# ./zookeeper-shell.sh owdev-zookeeper.openwhisk:2181
+```
+
+(Maybe needed to install java and gradle with)
+```
+apt install default-jre
+apt install gradle
 ```
 
 
@@ -213,3 +269,6 @@ So in order to have that, bind the volume from ubunto to (each) one of the nodes
 Either or:
   - Use latest MinIO but try to build a python 3.7 or higher runtime for the action
   - Use minio:7.1.8 and use python 3.6
+
+
+Training data cannot be stored locally but pulled from minio because an activation container cannot have access to the underlying pod's files. (possible with apache.openwhisk.Invoker modification but not sure how to do it with helm)

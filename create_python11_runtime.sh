@@ -2,6 +2,7 @@
 
 SESSION=OpenWhisk
 
+
 tmux new-window -t $SESSION:5 -n 'Python'
 
 echo "Creating Python 11 runtime"

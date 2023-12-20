@@ -2,9 +2,10 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: main-app
+  namespace: 
 
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: main-app
@@ -16,8 +17,7 @@ spec:
     spec:
       containers:
         - name: main-app
-          image: main-app
-          imagePullPolicy: Never
+          image: rggg1/main-app
           ports:
             - containerPort: 5000
               protocol: TCP
