@@ -17,13 +17,13 @@ then
 
     tmux rename-window -t 0 'Main'
 
-    tmux send-keys -t 'Main' 'cd ~/Desktop/openwhisk-test' C-m 'echo "Setting up Kubernetes cluster with openwhisk"'
+    tmux send-keys -t 'Main' 'echo "Setting up Kubernetes cluster with openwhisk"' C-m
 
     tmux new-window -t $SESSION:1 -n 'Kind'
 
     echo "creating cluster with kind"
 
-    tmux send-keys -t 'Kind' 'cd ~/Desktop/openwhisk-test/openwhisk-deploy-kube/deploy/kind' C-m './start-kind.sh; tmux wait -S kind-done' C-m
+    tmux send-keys -t 'Kind' 'cd ./openwhisk-deploy-kube/deploy/kind' C-m './start-kind.sh; tmux wait -S kind-done' C-m
 
     echo "waiting for kind to finish setup"
 
@@ -39,13 +39,11 @@ then
 
     echo "Starting kubernetes dashboard"
 
-    tmux send-keys -t $SESSION:Kubernetes-dashboard 'cd ~/Desktop/openwhisk-test' C-m
-
     tmux send-keys -t $SESSION:Kubernetes-dashboard 'kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.7.0/aio/deploy/recommended.yaml' C-m
 
     tmux send-keys -t $SESSION:Kubernetes-dashboard 'kubectl apply -f dashboard-adminuser.yaml && kubectl apply -f dashboard-cluster-role-binding.yaml && kubectl apply -f dashboard-admin-secret.yaml' C-m
 
-    tmux send-keys -t $SESSION:Kubernetes-dashboard 'kubectl proxy' C-m
+    tmux send-keys -t $SESSION:Kubernetes-dashboard 'kubectl proxy -p 8001' C-m
 
     sleep 1 
 
@@ -57,7 +55,7 @@ then
 
     tmux new-window -t $SESSION:3 -n 'Openwhisk'
 
-    tmux send-keys -t $SESSION:Openwhisk 'cd ~/Desktop/openwhisk-test/openwhisk-deploy-kube/deploy/kind' C-m 
+    tmux send-keys -t $SESSION:Openwhisk 'cd ./openwhisk-deploy-kube/deploy/kind' C-m
 
     tmux send-keys -t $SESSION:Openwhisk 'helm install owdev ../../helm/openwhisk/ -n openwhisk --create-namespace -f mycluster.yaml' C-m 
 
