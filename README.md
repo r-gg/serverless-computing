@@ -131,10 +131,6 @@ kubectl run curl --image=radial/busyboxplus:curl -i --tty --rm
 ## Create access key in minio dashboard
 
 Access Keys > create access key (not easy to automate 💀)
- 
-Maybe create bucket in main app and allow anonymous access to the created bucket (preferrably programatically : this is the only fn in minio python client that is close enough https://min.io/docs/minio/linux/developers/python/API.html#set-bucket-policy-bucket-name-policy ):
-![Alt text](image.png)
-
 
 # Installing `requirements.txt` when deploying python actions
 
