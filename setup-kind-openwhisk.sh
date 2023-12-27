@@ -57,7 +57,7 @@ then
 
     tmux send-keys -t $SESSION:Openwhisk 'cd ./openwhisk-deploy-kube/deploy/kind' C-m
 
-    tmux send-keys -t $SESSION:Openwhisk 'helm install owdev ../../helm/openwhisk/ -n openwhisk --create-namespace -f mycluster.yaml' C-m 
+    tmux send-keys -t $SESSION:Openwhisk 'helm install owdev ./../../helm/openwhisk/ -n openwhisk --create-namespace -f mycluster.yaml' C-m
 
 fi
 
