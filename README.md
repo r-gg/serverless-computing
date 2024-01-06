@@ -34,6 +34,17 @@ kubectl get pods -n openwhisk --watch
 
 install-packages should be completed.
 
+### Adding a new Openwhisk user (Optional) ~ Currently the guest account is used with predefined credentials.
+
+Guest credentials: "--auth 23bc46b1-71f6-4ed5-8c54-816aa4f8c502:123zO3xZCLrMN6v2BKK1dXYFpXlPkccOFqm12CdAsMgRU4VrNZ9lyGVCGuMDGIwP"
+
+```
+kubectl -n openwhisk  -ti exec owdev-wskadmin -- /bin/sh
+
+wskadmin user create fedUser
+```
+
+
 ## Set up kubernetes dashboard and start serving it
 
 ```
@@ -155,6 +166,13 @@ docker tag <image-id-of action-python-v3.11:1.0-SNAPSHOT> python11action
 
 # Debugging 
 
+
+## Debugging network in kubernetes 
+
+```
+kubectl run tmp-shell --rm -i --tty --image nicolaka/netshoot
+```
+
 ## Creating the action .zip (where the python requirements will be downloaded)
 
 Start the container where the action will be placed
@@ -197,9 +215,9 @@ In a kafka pod by openwhisk:
 root@owdev-kafka-0:/opt/kafka/bin# ./kafka-topics.sh --zookeper=localhost:9092 --list
 
 root@owdev-kafka-0:/# ./kafka-topics.sh --zookeeper=owdev-zookeeper.openwhisk:2181 --list
-
-
 ```
+
+
 
 ## Label pod so that it can be exposed as a service
 
@@ -249,6 +267,10 @@ apt install default-jre
 apt install gradle
 ```
 
+
+# Main-App
+
+The main app image now contains `wsk` and its apihost and auth are already set to `owdev-nginx.openwhisk.svc.cluster.local` and guest credentials (`23bc46b1-71f6-4ed5-8c54-816aa4f8c502:123zO3xZCLrMN6v2BKK1dXYFpXlPkccOFqm12CdAsMgRU4VrNZ9lyGVCGuMDGIwP`) respectively
 
 # Misc
 

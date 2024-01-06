@@ -10,8 +10,13 @@ import json
 import pandas as pd
 import requests
 import logging 
+from kafka.admin import KafkaAdminClient, NewTopic
+from kafka import KafkaProducer, KafkaConsumer
 
 app = Flask(__name__)
+
+
+# --------------- MinIO And dataset setup
 
 minio_access_key="minioadmin1"
 minio_secret_key="minioadmin1"
@@ -140,6 +145,7 @@ def create_bucket(client, dataset_bucket_name, res_string):
         
     return res_string
 
+
 @app.route('/setup-minio')
 def minio_setup():
 
@@ -175,15 +181,41 @@ def minio_setup():
     
     return res_string, 200
 
+
+
+# ------------------ Kafka
+
+kafka_url = "kafkica.openwhisk.svc.cluster.local"
+
+admin_client = KafkaAdminClient(
+    bootstrap_servers=kafka_url, 
+    client_id='myAdminClient' # can be set to any value
+)
+
+
+
+@app.route('/setup-kafka')
+def setup_kafka():
+    if ('federated' not in admin_client.list_topics()):
+        topic_list = [NewTopic(name="federated", num_partitions=1, replication_factor=1)]
+        admin_client.create_topics(new_topics=topic_list, validate_only=False)
+        return "Kafka topic added", 200
+    return "Kafka topic already exists", 200
+
 @app.route('/service')
 def service():
     app.logger.info("Welcome to notification service")
     return 'Notification Service',200
 
-@app.route('/sendEmail',methods=["POST"])
-def sendEmail():
-  return jsonify({"Accepted":202}),202
-    
-        
+@app.route('/learn')
+def learn():
+    consumer = KafkaConsumer(
+        'federated',
+        bootstrap_servers=kafka_url,
+        auto_offset_reset='earliest', # Start reading from the earliest messages
+        group_id='federated_grp'
+    )
+    return "Learned", 200
+
 if __name__ == '__main__':
 	app.run(debug=True)
