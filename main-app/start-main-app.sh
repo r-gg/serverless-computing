@@ -13,10 +13,6 @@ fi
 
 tmux new-session -d -s $SESSION
 
-tmux rename-window -t 0 'Main'
-
-tmux send-keys -t 'Main' 'cd ~/Desktop/openwhisk-test/main-app' C-m 'echo "~~~Setting up Kubernetes cluster with openwhisk ~~~"' C-m
-
 tmux new-window -t $SESSION:1 -n 'App'
 
 echo "Building docker image and pushing it to hub"

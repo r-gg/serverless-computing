@@ -167,13 +167,21 @@ docker tag <image-id-of action-python-v3.11:1.0-SNAPSHOT> python11action
 # Debugging 
 
 
+## Debugging ML and Action code with a jupyter notebook pod?
+
+```
+kubectl run notebook --tty --image quay.io/jupyter/scipy-notebook:2023-11-17 --expose=true --port=8888
+
+kubectl port-forward svc/notebook 10000:8888
+```
+
 ## Debugging network in kubernetes 
 
 ```
 kubectl run tmp-shell --rm -i --tty --image nicolaka/netshoot
 ```
 
-## Creating the action .zip (where the python requirements will be downloaded)
+## Creating the action .zip (where the python requirements will be downloaded) ~ Not needed anymore because the zip gets too big for openwhisk and cannot be deployed (See new `deploy-python-action.sh`)
 
 Start the container where the action will be placed
 ```
@@ -271,6 +279,14 @@ apt install gradle
 # Main-App
 
 The main app image now contains `wsk` and its apihost and auth are already set to `owdev-nginx.openwhisk.svc.cluster.local` and guest credentials (`23bc46b1-71f6-4ed5-8c54-816aa4f8c502:123zO3xZCLrMN6v2BKK1dXYFpXlPkccOFqm12CdAsMgRU4VrNZ9lyGVCGuMDGIwP`) respectively
+
+To download datasets to minio firstly log into minio dashboard, create access key where access key is `minioadmin1` and secret key is `minioadmin1` as well.
+
+Call `/setup-minio` endpoint of main-app
+
+Call `/download-dataset` ~ This downloads the entire MNIST dataset into the main-app pod and splits it into 50 pieces.
+
+Call `/upload-splits` ~ This uploads the 50 pieces into MinIO
 
 # Misc
 

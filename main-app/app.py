@@ -89,7 +89,7 @@ def download_dataset():
     app.logger.info(f"Training set (images, labels): {train_images.shape}, {train_labels.shape}")
     app.logger.info(f"Test set (images, labels): {test_images.shape}, {test_labels.shape}")
 
-    split_and_save_dataset(train_images, train_labels, test_images, test_labels, 50, 'split_mnist_data')
+    split_and_save_dataset_locally(train_images, train_labels, test_images, test_labels, 50, 'split_mnist_data')
     return "Downloaded and split", 200
 
 @app.route("/upload-splits")
@@ -114,12 +114,12 @@ def upload_splits_to_minio():
     return res_str + "\nUploaded splits to the new minio bucket", 200
 
 
-def create_bucket(client, dataset_bucket_name, res_string):
+def create_bucket(client, new_bucket_name, res_string):
     try: 
         buckets = client.list_buckets()
 
         # Create new bucket and set anonymous RW access policy
-        if dataset_bucket_name not in [bucket.name for bucket in buckets]:
+        if new_bucket_name not in [bucket.name for bucket in buckets]:
             client.make_bucket(new_bucket_name)
 
             policy = {

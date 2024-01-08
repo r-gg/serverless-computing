@@ -1,8 +1,8 @@
 #!/bin/bash
 
-echo "Usage ./deploy-python-action.sh <action-name> <zip_file>"
+echo "Usage ./deploy-python-action.sh <action-name>"
 
-echo "Creating the python (Python3.11) action on openwhisk with the name $1 and from the zip file $2"
+echo "Creating the python (Python3.11) action on openwhisk with the name $1"
 
 if [ -z "$1" ]
   then
@@ -10,10 +10,6 @@ if [ -z "$1" ]
     exit 1
 fi
 
-if [ -z "$2" ]
-  then
-    echo "No zip_file supplied"
-    exit 1
-fi
+zip $1.zip __main__.py
 
-wsk -i action create $1 --docker rggg1/python11action $2
+wsk -i action create $1 --docker rggg1/python11action $1.zip

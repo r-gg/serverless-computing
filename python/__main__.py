@@ -1,12 +1,16 @@
 #!/usr/bin/env python
 
-import check
 from minio import Minio
 from sklearn.neural_network import MLPClassifier
 from sklearn.metrics import classification_report
 import numpy as np
 import gzip
 import os
+from kafka import KafkaProducer
+
+kafka_url = "kafkica.openwhisk.svc.cluster.local"
+
+
 
 def download_and_extract(client, bucket_name, object_name, file_path):
     client.fget_object(bucket_name, object_name, file_path)
@@ -35,16 +39,29 @@ def train_mnist_model(minio_client, bucket_name, part_num):
 
 def main(args):
     # print(args)
-    check.check_it(args)
+    part_number = 1
+    producer = KafkaProducer(
+        bootstrap_servers=kafka_url
+    )
+
+    producer.send('federated', f'Openwhisk Action with split number {part_number} started'.encode())
+    producer.flush()
+
     client = Minio(
         "minio-operator9000.minio-dev.svc.cluster.local:9000",
         secure=False
     )
     dataset_bucket_name = 'dataset-bucket'
-    part_number = 1
+    
 
-    return train_mnist_model(client, dataset_bucket_name, part_number)
+    classification_report = train_mnist_model(client, dataset_bucket_name, part_number)
 
+    # producer.send('federated', f'Openwhisk Action with split number {part_number} finished')
+    # producer.flush()
+
+
+
+    return classification_report
 
 
 if __name__ == '__main__':
