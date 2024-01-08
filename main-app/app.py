@@ -14,6 +14,7 @@ import logging
 from kafka.admin import KafkaAdminClient, NewTopic
 from kafka import KafkaProducer, KafkaConsumer
 import pickle
+import time
 
 app = Flask(__name__)
 
@@ -25,6 +26,10 @@ minio_secret_key="minioadmin1"
 dataset_bucket_name = "dataset-bucket"
 global_model_bucket_name = "global-model-bucket"
 global_model_file_name = 'global-model.pkl'
+minis = {
+    "mini_x" : None,
+    "mini_y" : None
+}
 
 def download_mnist_files(url_base, file_names, save_dir):
     for file_name in file_names:
@@ -91,6 +96,8 @@ def download_dataset():
     test_images, test_labels = extract_images_and_labels(os.path.join(save_dir, 't10k-images-idx3-ubyte.gz'),
                                                         os.path.join(save_dir, 't10k-labels-idx1-ubyte.gz'))
 
+    minis['mini_x'] = train_images[0]
+    minis['mini_y'] = train_images[0]
     app.logger.info(f"Training set (images, labels): {train_images.shape}, {train_labels.shape}")
     app.logger.info(f"Test set (images, labels): {test_images.shape}, {test_labels.shape}")
 
@@ -217,7 +224,7 @@ def service():
     return 'Notification Service',200
 
 
-def merge_models(model1, model2_coefs, model2_intercepts, mini_x, mini_y):
+def merge_models(model1, model2_coefs, model2_intercepts):
     averaged_coefs = [0.5 * (w1 + w2) for w1, w2 in zip(model1.coefs_, model2_coefs)]
     averaged_intercepts = [0.5 * (b1 + b2) for b1, b2 in zip(model1.intercepts_, model2_intercepts)]
 
@@ -226,7 +233,7 @@ def merge_models(model1, model2_coefs, model2_intercepts, mini_x, mini_y):
                                 solver=model1.solver, alpha=model1.alpha, batch_size=model1.batch_size,
                                 learning_rate=model1.learning_rate, max_iter=model1.max_iter,
                                 random_state=model1.random_state, warm_start=True)
-    merged_model.fit(mini_x, mini_y) # just to initialize the variables
+    merged_model.fit(minis['mini_x'], minis['mini_y']) # just to initialize the variables
     merged_model.coefs_ = averaged_coefs
     merged_model.intercepts_ = averaged_intercepts
     return merged_model
@@ -249,12 +256,14 @@ def learn():
     consumer = KafkaConsumer(
         'federated',
         bootstrap_servers=kafka_url,
-        auto_offset_reset='earliest', # Start reading from the earliest messages
-        group_id='federated_grp',
+        # auto_offset_reset='earliest', # Start reading from the earliest messages
+        group_id='federated_grp_5',
         value_deserializer=lambda m: pickle.loads(m)
     )
     # Warm start needed for incremental learning
     global_model = MLPClassifier(hidden_layer_sizes=(50,), max_iter=50, solver='sgd', random_state=1, verbose=True, warm_start=True)
+    # Just initializing the coefs
+    global_model.fit(minis['mini_x'], minis['mini_y']) # just to initialize the variables
 
     # Save global model to MinIO
     client = Minio("minio-operator9000.minio-dev.svc.cluster.local:9000",
@@ -271,11 +280,21 @@ def learn():
 
     result_dict = None
     app.logger.info("Awaiting kafka answers")
-    # Await kafka answers
-    for message in consumer:
-        app.logger.info("Got kafka answer")
-        result_dict = message.value
-        break 
+    timeout = 10  # Set your timeout in seconds
+    start_time = time.time()
+
+    while True:
+        message = consumer.poll(timeout_ms=1000)  # Poll for 1000ms (1 second)
+        if message:
+            for _, messages in message.items():
+                for msg in messages:
+                    result_dict = msg.value
+                    break  # Exit after the first message is processed
+            break
+
+        if time.time() - start_time > timeout:
+            app.logger.info("Timeout reached, no message received.")
+            break
 
     new_model_coefs = result_dict['coefs']
     new_model_intercepts = result_dict['intercepts']
@@ -292,7 +311,7 @@ def learn():
     # loop
 
 
-
+    consumer.close()
     return "Learned", 200
 
 if __name__ == '__main__':

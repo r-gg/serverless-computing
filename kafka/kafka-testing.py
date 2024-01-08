@@ -1,6 +1,6 @@
 from kafka.admin import KafkaAdminClient, NewTopic
 from kafka import KafkaProducer, KafkaConsumer
-
+import pickle
 
 kafka_url = "kafkica.openwhisk.svc.cluster.local"
 
@@ -27,9 +27,11 @@ producer.flush()
 consumer = KafkaConsumer(
     'federated',
     bootstrap_servers=kafka_url,
-    auto_offset_reset='earliest', # Start reading from the earliest messages
-    group_id='federated_grp_2'
+    #auto_offset_reset='earliest', # Start reading from the earliest messages
+    group_id='federated_grp_4',
+    #value_deserializer=lambda m: pickle.loads(m)
 )
 
 for message in consumer:
-    print(f"Received message: {message.value}")
+    print(f"Received message: {message.value[:100]}")
+    print(f"Unpickled: {pickle.loads(message.value)}")

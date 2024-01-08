@@ -65,8 +65,9 @@ def main(args):
         value_serializer=lambda v: pickle.dumps(v)
     )
 
-    producer.send('federated', f'Openwhisk Action with split number {part_number} started'.encode())
-    producer.flush()
+    # shouldnt be sent because of the unpickling
+    #producer.send('federated', f'Openwhisk Action with split number {part_number} started'.encode())
+    # producer.flush()
 
     client = Minio(
         "minio-operator9000.minio-dev.svc.cluster.local:9000",
