@@ -170,10 +170,12 @@ docker tag <image-id-of action-python-v3.11:1.0-SNAPSHOT> python11action
 ## Debugging ML and Action code with a jupyter notebook pod?
 
 ```
-kubectl run notebook --tty --image quay.io/jupyter/scipy-notebook:2023-11-17 --expose=true --port=8888
-
-kubectl port-forward svc/notebook 10000:8888
+./start-jupyter.sh
 ```
+
+Runs the jupyter pod as root so that further packages can be installed for debugging. It forwards the localhost:10000 to the pod port where the dashboard is served (8888). Note: No root privileges are available in dashboard. If you want to add packages or generally have sudo access, you have to exec into the pod.
+
+The script also prints out the token needed for logging into the dashboard.
 
 ## Debugging network in kubernetes 
 
@@ -224,7 +226,6 @@ root@owdev-kafka-0:/opt/kafka/bin# ./kafka-topics.sh --zookeper=localhost:9092 -
 
 root@owdev-kafka-0:/# ./kafka-topics.sh --zookeeper=owdev-zookeeper.openwhisk:2181 --list
 ```
-
 
 
 ## Label pod so that it can be exposed as a service
@@ -299,17 +300,10 @@ from [https://github.com/apache/openwhisk-deploy-kube/issues/253#issuecomment-40
 
 So in order to have that, bind the volume from ubunto to (each) one of the nodes in the simulated k8s cluster (kind-workers)
 
-# Questions
-
-1. Can you add and remove nodes to/from kind cluster after deployment? (maybe it goes over kubernetes?)
-
 
 
 # Issues:
 
-Either or:
-  - Use latest MinIO but try to build a python 3.7 or higher runtime for the action
-  - Use minio:7.1.8 and use python 3.6
-
-
 Training data cannot be stored locally but pulled from minio because an activation container cannot have access to the underlying pod's files. (possible with apache.openwhisk.Invoker modification but not sure how to do it with helm)
+
+Kafka messages might not be consumed due to unclosed consumers. If it happens, just change the consumer's `group_id`.
