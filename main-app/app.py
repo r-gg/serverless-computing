@@ -2,6 +2,7 @@ import io
 import os
 from flask import Flask, jsonify, request
 import sklearn
+from sklearn.neural_network import MLPClassifier
 from minio import Minio
 from minio.error import S3Error
 import numpy as np
@@ -12,6 +13,7 @@ import requests
 import logging 
 from kafka.admin import KafkaAdminClient, NewTopic
 from kafka import KafkaProducer, KafkaConsumer
+import pickle
 
 app = Flask(__name__)
 
@@ -20,6 +22,9 @@ app = Flask(__name__)
 
 minio_access_key="minioadmin1"
 minio_secret_key="minioadmin1"
+dataset_bucket_name = "dataset-bucket"
+global_model_bucket_name = "global-model-bucket"
+global_model_file_name = 'global-model.pkl'
 
 def download_mnist_files(url_base, file_names, save_dir):
     for file_name in file_names:
@@ -157,10 +162,9 @@ def minio_setup():
     )
     app.logger.info("connected to the client")
 
-    dataset_bucket_name = "dataset-bucket"
     res_string = create_bucket(client, dataset_bucket_name, "")
+    res_string += create_bucket(client, global_model_bucket_name, "")
 
-    
     
 
     # Attempt to upload from an anonymous client
@@ -181,7 +185,12 @@ def minio_setup():
     
     return res_string, 200
 
-
+@app.route('/build-everything')
+def build_everything():
+    minio_setup()
+    download_dataset()
+    upload_splits_to_minio()
+    setup_kafka()
 
 # ------------------ Kafka
 
@@ -207,14 +216,83 @@ def service():
     app.logger.info("Welcome to notification service")
     return 'Notification Service',200
 
+
+def merge_models(model1, model2_coefs, model2_intercepts, mini_x, mini_y):
+    averaged_coefs = [0.5 * (w1 + w2) for w1, w2 in zip(model1.coefs_, model2_coefs)]
+    averaged_intercepts = [0.5 * (b1 + b2) for b1, b2 in zip(model1.intercepts_, model2_intercepts)]
+
+    # Create a new model with the averaged weights
+    merged_model = MLPClassifier(hidden_layer_sizes=model1.hidden_layer_sizes, activation=model1.activation,
+                                solver=model1.solver, alpha=model1.alpha, batch_size=model1.batch_size,
+                                learning_rate=model1.learning_rate, max_iter=model1.max_iter,
+                                random_state=model1.random_state, warm_start=True)
+    merged_model.fit(mini_x, mini_y) # just to initialize the variables
+    merged_model.coefs_ = averaged_coefs
+    merged_model.intercepts_ = averaged_intercepts
+    return merged_model
+
+# Saves the new global model to minio
+def save_new_global_model(client, global_model_new):
+    serialized_data = pickle.dumps(global_model_new)
+
+    client.put_object(
+        global_model_bucket_name,
+        global_model_file_name,
+        data=io.BytesIO(serialized_data),
+        length=len(serialized_data),
+        content_type="application/octet-stream"
+    )
+
+
 @app.route('/learn')
 def learn():
     consumer = KafkaConsumer(
         'federated',
         bootstrap_servers=kafka_url,
         auto_offset_reset='earliest', # Start reading from the earliest messages
-        group_id='federated_grp'
+        group_id='federated_grp',
+        value_deserializer=lambda m: pickle.loads(m)
     )
+    # Warm start needed for incremental learning
+    global_model = MLPClassifier(hidden_layer_sizes=(50,), max_iter=50, solver='sgd', random_state=1, verbose=True, warm_start=True)
+
+    # Save global model to MinIO
+    client = Minio("minio-operator9000.minio-dev.svc.cluster.local:9000",
+                        secure=False)
+    
+    app.logger.info("Saving first global model")
+
+    save_new_global_model(client, global_model)
+
+    app.logger.info("Starting training")
+
+    # Start training 
+    os.system("wsk -i action invoke learner --param split_nr 3")
+
+    result_dict = None
+    app.logger.info("Awaiting kafka answers")
+    # Await kafka answers
+    for message in consumer:
+        app.logger.info("Got kafka answer")
+        result_dict = message.value
+        break 
+
+    new_model_coefs = result_dict['coefs']
+    new_model_intercepts = result_dict['intercepts']
+
+    # Aggregate when done ~ TODO
+    # Currently only the avg is take from the previous global model and new model
+    app.logger.info("Aggregating")
+    global_model = merge_models(global_model, new_model_coefs, new_model_intercepts)
+
+    app.logger.info("Saving new model")
+    # Save new global Model
+    save_new_global_model(client, global_model)
+    
+    # loop
+
+
+
     return "Learned", 200
 
 if __name__ == '__main__':

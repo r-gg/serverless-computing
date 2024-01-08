@@ -1,9 +1,22 @@
 # TODOs for serverless computing
 
-- create a designated kafka topic in main-app for communication with the activations.
-- add model training in actions
-- add notifying kafka in actions
 - add model aggregation in aggregator
+- add accuracy evaluation in main-app (after each training round)
+
+
+# Order at setup
+
+1. setup-kind-openwhisk
+2. setup-minio + add minioadmin1 access key 
+3. setup-kafka
+4. start-main-app
+5. goto localhost:5000/build-everything ~ creates a bucket, splits and uploads MNIST dataset to the bucket. creates a dedicated kafka topic called 'federated'
+
+# Available services to all pods
+
+- kafka at : `kafkica.openwhisk.svc.cluster.local`
+- minio at : `minio-operator9000.minio-dev.svc.cluster.local` (port 9000)
+- openwhisk API (for wsk CLI) : `owdev-nginx.openwhisk.svc.cluster.local`
 
 # Openwhisk setup
 

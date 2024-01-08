@@ -15,6 +15,14 @@ tmux new-session -d -s $SESSION
 
 tmux new-window -t $SESSION:1 -n 'App'
 
+echo "Building docker image and pushing it to hub"
+
+tmux send-keys -t $SESSION:App 'cd ~/Desktop/openwhisk-test/main-app' C-m 'docker build -t main-app .' C-m
+
+tmux send-keys -t $SESSION:App 'docker tag main-app rggg1/main-app' C-m
+
+tmux send-keys -t $SESSION:App 'docker push rggg1/main-app' C-m
+
 echo "Applying the deployment"
 
 
