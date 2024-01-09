@@ -11,6 +11,6 @@ tmux rename-window -t 0 'Main'
 
 echo "Exposing Kafka"
 
-tmux send-keys -t $SESSION:Main 'cd ~/Desktop/openwhisk-test/kafka' C-m 'kubectl label pod -n openwhisk owdev-kafka-0 application=kafka' C-m 'kubectl apply -f kafka-svc.yaml' C-m
+tmux send-keys -t $SESSION:Main 'cd ./kafka' C-m 'kubectl label pod -n openwhisk owdev-kafka-0 application=kafka' C-m 'kubectl apply -f kafka-svc.yaml' C-m
 
 echo "${bold}done"

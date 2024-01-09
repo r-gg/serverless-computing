@@ -11,7 +11,7 @@ tmux rename-window -t 0 'Main'
 
 echo "deploying minio"
 
-tmux send-keys -t $SESSION:Main 'cd ~/Desktop/openwhisk-test/minio' C-m 'kubectl apply -f minio-dev.yaml' C-m
+tmux send-keys -t $SESSION:Main 'cd ./minio' C-m 'kubectl apply -f minio-dev.yaml' C-m
 
 sleep 8
 
