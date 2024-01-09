@@ -14,24 +14,6 @@ dataset_bucket_name = "dataset-bucket"
 global_model_bucket_name = "global-model-bucket"
 global_model_file_name = 'global-model.pkl'
 
-mini_x = None
-mini_y = None
-
-def merge_models(model1, model2_coefs, model2_intercepts, mini_x, mini_y):
-    averaged_coefs = [0.5 * (w1 + w2) for w1, w2 in zip(model1.coefs_, model2_coefs)]
-    averaged_intercepts = [0.5 * (b1 + b2) for b1, b2 in zip(model1.intercepts_, model2_intercepts)]
-
-    # Create a new model with the averaged weights
-    merged_model = MLPClassifier(hidden_layer_sizes=model1.hidden_layer_sizes, activation=model1.activation,
-                                solver=model1.solver, alpha=model1.alpha, batch_size=model1.batch_size,
-                                learning_rate=model1.learning_rate, max_iter=model1.max_iter,
-                                random_state=model1.random_state, warm_start=True)
-    merged_model.fit(mini_x, mini_y) # just to initialize the variables
-    merged_model.coefs_ = averaged_coefs
-    merged_model.intercepts_ = averaged_intercepts
-    return merged_model
-
-
 def download_and_extract(client, bucket_name, object_name, file_path):
     client.fget_object(bucket_name, object_name, file_path)
     with gzip.open(file_path, 'rb') as f_in:
@@ -52,7 +34,7 @@ def train_mnist_model(minio_client, bucket_name, part_num, global_model):
 
     # Train neural network
     clf = global_model
-    clf.fit(train_images, train_labels)
+    clf.partial_fit(train_images, train_labels, classes=np.arange(10))
     predictions = clf.predict(test_images)
     return accuracy_score(test_labels, predictions), clf
 
@@ -87,12 +69,8 @@ def main(args):
 
     accuracy, model = train_mnist_model(client, dataset_bucket_name, part_number, global_model)
     
-    res_dict = {
-        "coefs" : model.coefs_,
-        "intercepts": model.intercepts_
-    }
 
-    producer.send('federated', res_dict)
+    producer.send('federated', model)
     producer.flush()
 
     return { "res": f"Done training on part {part_number}, local test accuracy: {accuracy}" }

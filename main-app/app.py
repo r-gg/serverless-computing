@@ -1,6 +1,7 @@
 import io
 import os
 from flask import Flask, jsonify, request
+from sklearn.metrics import accuracy_score
 import sklearn
 from sklearn.neural_network import MLPClassifier
 from minio import Minio
@@ -29,6 +30,11 @@ global_model_file_name = 'global-model.pkl'
 minis = {
     "mini_x" : None,
     "mini_y" : None
+}
+
+test_set = {
+    "images" : None,
+    "labels" : None
 }
 
 def download_mnist_files(url_base, file_names, save_dir):
@@ -96,10 +102,13 @@ def download_dataset():
     test_images, test_labels = extract_images_and_labels(os.path.join(save_dir, 't10k-images-idx3-ubyte.gz'),
                                                         os.path.join(save_dir, 't10k-labels-idx1-ubyte.gz'))
 
-    minis['mini_x'] = train_images[0]
-    minis['mini_y'] = train_images[0]
+    minis['mini_x'] = train_images[0:2].reshape(-1, 784)
+    minis['mini_y'] = train_labels[0:2].reshape(-1,)
     app.logger.info(f"Training set (images, labels): {train_images.shape}, {train_labels.shape}")
     app.logger.info(f"Test set (images, labels): {test_images.shape}, {test_labels.shape}")
+
+    test_set['images'] = test_images.reshape(-1, 784)
+    test_set['labels'] = test_labels.reshape(-1,)
 
     split_and_save_dataset_locally(train_images, train_labels, test_images, test_labels, 50, 'split_mnist_data')
     return "Downloaded and split", 200
@@ -198,6 +207,7 @@ def build_everything():
     download_dataset()
     upload_splits_to_minio()
     setup_kafka()
+    return "Minio is set, dataset splits uploaded to minio and kafka topic added", 200
 
 # ------------------ Kafka
 
@@ -232,8 +242,8 @@ def merge_models(model1, model2_coefs, model2_intercepts):
     merged_model = MLPClassifier(hidden_layer_sizes=model1.hidden_layer_sizes, activation=model1.activation,
                                 solver=model1.solver, alpha=model1.alpha, batch_size=model1.batch_size,
                                 learning_rate=model1.learning_rate, max_iter=model1.max_iter,
-                                random_state=model1.random_state, warm_start=True)
-    merged_model.fit(minis['mini_x'], minis['mini_y']) # just to initialize the variables
+                                random_state=model1.random_state, warm_start=False)
+    merged_model.partial_fit(minis['mini_x'], minis['mini_y'], classes=np.arange(10)) # just to initialize the variables
     merged_model.coefs_ = averaged_coefs
     merged_model.intercepts_ = averaged_intercepts
     return merged_model
@@ -257,13 +267,13 @@ def learn():
         'federated',
         bootstrap_servers=kafka_url,
         # auto_offset_reset='earliest', # Start reading from the earliest messages
-        group_id='federated_grp_5',
+        group_id='federated_grp_6',
         value_deserializer=lambda m: pickle.loads(m)
     )
     # Warm start needed for incremental learning
-    global_model = MLPClassifier(hidden_layer_sizes=(50,), max_iter=50, solver='sgd', random_state=1, verbose=True, warm_start=True)
+    global_model = MLPClassifier(hidden_layer_sizes=(50,), max_iter=50, solver='sgd', random_state=1, verbose=True, warm_start=False)
     # Just initializing the coefs
-    global_model.fit(minis['mini_x'], minis['mini_y']) # just to initialize the variables
+    global_model.partial_fit(minis['mini_x'], minis['mini_y'], classes=np.arange(10)) # just to initialize the variables
 
     # Save global model to MinIO
     client = Minio("minio-operator9000.minio-dev.svc.cluster.local:9000",
@@ -275,44 +285,51 @@ def learn():
 
     app.logger.info("Starting training")
 
-    # Start training 
-    os.system("wsk -i action invoke learner --param split_nr 3")
+    training_rounds = 10
+    accuracies = []
+    for i in range(1,training_rounds):
+        # Start training 
+        os.system(f"wsk -i action invoke learner --param split_nr {i}")
 
-    result_dict = None
-    app.logger.info("Awaiting kafka answers")
-    timeout = 10  # Set your timeout in seconds
-    start_time = time.time()
+        result_dict = None
+        app.logger.info("Awaiting kafka answers")
+        timeout = 10  # Set your timeout in seconds
+        start_time = time.time()
 
-    while True:
-        message = consumer.poll(timeout_ms=1000)  # Poll for 1000ms (1 second)
-        if message:
-            for _, messages in message.items():
-                for msg in messages:
-                    result_dict = msg.value
-                    break  # Exit after the first message is processed
-            break
+        # TODO : Wait for multiple messages (e.g. 5-10)
+        new_model = None
+        while True:
+            message = consumer.poll(timeout_ms=1000)  # Poll for 1000ms (1 second)
+            if message:
+                for _, messages in message.items():
+                    for msg in messages:
+                        new_model = msg.value
+                        break  # Exit after the first message is processed
+                break
 
-        if time.time() - start_time > timeout:
-            app.logger.info("Timeout reached, no message received.")
-            break
+            if time.time() - start_time > timeout:
+                app.logger.info("Timeout reached, no message received.")
+                break
 
-    new_model_coefs = result_dict['coefs']
-    new_model_intercepts = result_dict['intercepts']
+        
+        # Aggregate when done ~ TODO
+        # Currently only the new model is taken as a new global model
+        app.logger.info("Aggregating")
+        
+        #global_model = merge_models(global_model, new_model.coefs_, new_model.intercepts_)
+        global_model = new_model
+        preds = global_model.predict(test_set['images'])
+        acc = accuracy_score(test_set['labels'], preds)
+        accuracies.append(acc)
+        app.logger.info("Saving new model")
+        # Save new global Model
+        save_new_global_model(client, global_model)
 
-    # Aggregate when done ~ TODO
-    # Currently only the avg is take from the previous global model and new model
-    app.logger.info("Aggregating")
-    global_model = merge_models(global_model, new_model_coefs, new_model_intercepts)
 
-    app.logger.info("Saving new model")
-    # Save new global Model
-    save_new_global_model(client, global_model)
-    
-    # loop
 
 
     consumer.close()
-    return "Learned", 200
+    return f"Learned: Accuracies {accuracies}", 200
 
 if __name__ == '__main__':
 	app.run(debug=True)

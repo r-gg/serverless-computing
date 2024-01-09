@@ -19,6 +19,34 @@ tmux new-window -t $SESSION:1 -n 'svc'
 
 tmux send-keys -t $SESSION:svc 'kubectl expose pod minio --port=9000 --name=minio-operator9000 -n minio-dev' C-m
 
+# Name of the pod to check
+POD_NAME="minio"
+
+# Namespace where the pod is located, change if necessary
+NAMESPACE="minio-dev"
+
+# Interval in seconds between checks
+INTERVAL=10
+
+echo "Waiting for pod $POD_NAME to be running..."
+
+# Loop until the pod status is 'Running'
+while true; do
+    # Get the status of the pod
+    STATUS=$(kubectl get pod $POD_NAME -n $NAMESPACE -o jsonpath='{.status.phase}')
+
+    # Check if the status is 'Running'
+    if [ "$STATUS" == "Running" ]; then
+        echo "Pod $POD_NAME is running."
+        break
+    else
+        echo "Pod $POD_NAME status: $STATUS. Waiting..."
+    fi
+
+    # Wait for the specified interval before checking again
+    sleep $INTERVAL
+done
+
 tmux send-keys -t $SESSION:Main 'kubectl port-forward pod/minio 9000:9090 -n minio-dev' C-m
 
 echo "Minio Reachable on http://localhost:9000 the username and password are : ${bold}minioadmin"

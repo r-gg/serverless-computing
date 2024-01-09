@@ -1,16 +1,28 @@
 # TODOs for serverless computing
 
-- add model aggregation in aggregator
-- add accuracy evaluation in main-app (after each training round)
-
+- parallel training (multiple openwhisk invocations at once)
+- after these invocations are done, merge them and save as new global model
 
 # Order at setup
 
 1. setup-kind-openwhisk
-2. setup-minio + add minioadmin1 access key 
+2. setup-minio (added a little update to the setup script and did not test it, so it might not work) + add minioadmin1 access key in the dashboard 
 3. setup-kafka
 4. start-main-app
 5. goto localhost:5000/build-everything ~ creates a bucket, splits and uploads MNIST dataset to the bucket. creates a dedicated kafka topic called 'federated'
+6. prepare the action: `......./python$ ./deploy-python-action.sh learner`
+7. to start learning goto localhost:5000/learn
+
+# After changing the action code
+
+- Delete action `wski action delete learner`
+- Redeploy action `......./python$ ./deploy-python-action.sh learner`
+
+# After changing the main-app code
+
+- Delete deployment `kubectl delete deployment main-app -n main-app`
+- Kill tmux session `tmux kill-session -t main-app`
+- rebuild and deploy `...../main-app$ ./build-and-start-main-app.sh`
 
 # Available services to all pods
 
