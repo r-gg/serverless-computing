@@ -13,6 +13,19 @@
 6. prepare the action: `......./python$ ./deploy-python-action.sh learner`
 7. to start learning goto localhost:5000/learn
 
+# To start learning
+
+After staring the main-app, it gets served on localhost:5000. After navigating to `/build-everything` the training can start.
+
+To start training navigate to `/learn`. Pass the arguments with url params: `/learn?nclients=10&nrounds=10&nselected=5`
+
+Default values are:
+- nclients=3
+- nselected=3
+- nrounds=5
+
+Each round starts nclients and each client gets one split. As soon as the 50 splits get used the splits start getting re-used.
+
 # After changing the action code
 
 - Delete action `wski action delete learner`
@@ -29,6 +42,12 @@
 - kafka at : `kafkica.openwhisk.svc.cluster.local`
 - minio at : `minio-operator9000.minio-dev.svc.cluster.local` (port 9000)
 - openwhisk API (for wsk CLI) : `owdev-nginx.openwhisk.svc.cluster.local`
+
+
+# Developing the main app
+
+- Ports 5000 and 5001 of the main-app pod are open. The default app is served on 5000 and 5001 is left for experimentation.
+- If you want to add custom code to the main flask app, modify the app.py in the pod and start serving the flask app on localhost:5001
 
 # Openwhisk setup
 
@@ -310,7 +329,7 @@ To download datasets to minio firstly log into minio dashboard, create access ke
 
 Call `/setup-minio` endpoint of main-app
 
-Call `/download-dataset` ~ This downloads the entire MNIST dataset into the main-app pod and splits it into 50 pieces.
+Call `/download-and-split-dataset` ~ This downloads the entire MNIST dataset into the main-app pod and splits it into 50 pieces.
 
 Call `/upload-splits` ~ This uploads the 50 pieces into MinIO
 

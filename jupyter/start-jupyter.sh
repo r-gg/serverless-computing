@@ -28,6 +28,6 @@ log_output=$(kubectl logs $pod_name)
 token=$(echo "$log_output" | grep -oP 'token=\K[^ ]+' | head -n 1)
 
 # Print the extracted token
-echo "Use the following token to access the dashboard on http://localhost:10000 : $token"
+echo "Use the following token to access the dashboard on http://localhost:10000:$token"
 
 kubectl port-forward pod/my-jupyter-notebook 10000:8888

@@ -35,3 +35,5 @@ consumer = KafkaConsumer(
 for message in consumer:
     print(f"Received message: {message.value[:100]}")
     print(f"Unpickled: {pickle.loads(message.value)}")
+
+consumer.close()

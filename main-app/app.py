@@ -83,7 +83,34 @@ def save_gzipped_file(data, file_path):
     with gzip.open(file_path, 'wb') as f:
         f.write(data)
 
-@app.route('/download-dataset')
+def set_minis():
+    url_base = 'http://yann.lecun.com/exdb/mnist/'
+    test_file_names = ['t10k-images-idx3-ubyte.gz', 't10k-labels-idx1-ubyte.gz']
+
+    # Directory where to save the downloaded files
+    save_dir = 'MNIST_data'
+    os.makedirs(save_dir, exist_ok=True)
+
+    # Check if test files exist, if not download them
+    
+    file_path = os.path.join(save_dir, test_file_names[0])
+    if not os.path.exists(file_path):
+        download_mnist_files(url_base, test_file_names, save_dir)
+
+    # Load and extract data from test files
+    test_images, test_labels = extract_images_and_labels(os.path.join(save_dir, 't10k-images-idx3-ubyte.gz'),
+                                                         os.path.join(save_dir, 't10k-labels-idx1-ubyte.gz'))
+
+    # Set mini variables
+    minis['mini_x'] = test_images[0:2].reshape(-1, 784)
+    minis['mini_y'] = test_labels[0:2].reshape(-1,)
+    test_set['images'] = test_images.reshape(-1, 784)
+    test_set['labels'] = test_labels.reshape(-1,)
+
+    app.logger.info("Mini variables set")
+
+
+@app.route('/download-and-split-dataset')
 def download_dataset():
     url_base = 'http://yann.lecun.com/exdb/mnist/'
     file_names = ['train-images-idx3-ubyte.gz', 'train-labels-idx1-ubyte.gz',
@@ -93,24 +120,35 @@ def download_dataset():
     save_dir = 'MNIST_data'
     os.makedirs(save_dir, exist_ok=True)
 
-    # Download MNIST dataset files
-    download_mnist_files(url_base, file_names, save_dir)
+    # Download MNIST dataset files only if all four files are missing
+    missing_files = [not os.path.exists(os.path.join(save_dir, file_name)) for file_name in file_names]
+    if any(missing_files):
+        download_mnist_files(url_base, file_names, save_dir)
+    else:
+        app.logger.info("MNIST dataset files already exist")
 
-    # Load and extract data
-    train_images, train_labels = extract_images_and_labels(os.path.join(save_dir, 'train-images-idx3-ubyte.gz'),
-                                                        os.path.join(save_dir, 'train-labels-idx1-ubyte.gz'))
-    test_images, test_labels = extract_images_and_labels(os.path.join(save_dir, 't10k-images-idx3-ubyte.gz'),
-                                                        os.path.join(save_dir, 't10k-labels-idx1-ubyte.gz'))
+    # Perform splitting only if all 200 split files are missing    
+    split_dir = 'split_mnist_data'
 
-    minis['mini_x'] = train_images[0:2].reshape(-1, 784)
-    minis['mini_y'] = train_labels[0:2].reshape(-1,)
-    app.logger.info(f"Training set (images, labels): {train_images.shape}, {train_labels.shape}")
-    app.logger.info(f"Test set (images, labels): {test_images.shape}, {test_labels.shape}")
+    if not os.path.exists(split_dir) or len(os.listdir(split_dir)) != 200:
+        # Load and extract data
+        train_images, train_labels = extract_images_and_labels(os.path.join(save_dir, 'train-images-idx3-ubyte.gz'),
+                                                            os.path.join(save_dir, 'train-labels-idx1-ubyte.gz'))
+        test_images, test_labels = extract_images_and_labels(os.path.join(save_dir, 't10k-images-idx3-ubyte.gz'),
+                                                            os.path.join(save_dir, 't10k-labels-idx1-ubyte.gz'))
 
-    test_set['images'] = test_images.reshape(-1, 784)
-    test_set['labels'] = test_labels.reshape(-1,)
+        minis['mini_x'] = test_images[0:2].reshape(-1, 784)
+        minis['mini_y'] = test_labels[0:2].reshape(-1,)
+        app.logger.info(f"Training set (images, labels): {train_images.shape}, {train_labels.shape}")
+        app.logger.info(f"Test set (images, labels): {test_images.shape}, {test_labels.shape}")
 
-    split_and_save_dataset_locally(train_images, train_labels, test_images, test_labels, 50, 'split_mnist_data')
+        test_set['images'] = test_images.reshape(-1, 784)
+        test_set['labels'] = test_labels.reshape(-1,)
+
+        split_and_save_dataset_locally(train_images, train_labels, test_images, test_labels, 50, 'split_mnist_data')
+    else:
+        app.logger.info("Split files already exist, loading minis")
+        set_minis()
     return "Downloaded and split", 200
 
 @app.route("/upload-splits")
@@ -234,19 +272,30 @@ def service():
     return 'Notification Service',200
 
 
-def merge_models(model1, model2_coefs, model2_intercepts):
-    averaged_coefs = [0.5 * (w1 + w2) for w1, w2 in zip(model1.coefs_, model2_coefs)]
-    averaged_intercepts = [0.5 * (b1 + b2) for b1, b2 in zip(model1.intercepts_, model2_intercepts)]
+def merge_models(models):
+    # Ensure there is at least one model to merge
+    if not models:
+        raise ValueError("No models provided for merging")
 
-    # Create a new model with the averaged weights
-    merged_model = MLPClassifier(hidden_layer_sizes=model1.hidden_layer_sizes, activation=model1.activation,
-                                solver=model1.solver, alpha=model1.alpha, batch_size=model1.batch_size,
-                                learning_rate=model1.learning_rate, max_iter=model1.max_iter,
-                                random_state=model1.random_state, warm_start=False)
-    merged_model.partial_fit(minis['mini_x'], minis['mini_y'], classes=np.arange(10)) # just to initialize the variables
+    # Calculate the average of coefficients and intercepts
+    averaged_coefs = [sum(w) / len(models) for w in zip(*[model.coefs_ for model in models])]
+    averaged_intercepts = [sum(b) / len(models) for b in zip(*[model.intercepts_ for model in models])]
+
+    # Create a new model with the averaged weights, using parameters from the first model
+    first_model = models[0]
+    merged_model = MLPClassifier(hidden_layer_sizes=first_model.hidden_layer_sizes, activation=first_model.activation,
+                                 solver=first_model.solver, alpha=first_model.alpha, batch_size=first_model.batch_size,
+                                 learning_rate=first_model.learning_rate, max_iter=first_model.max_iter,
+                                 random_state=first_model.random_state, warm_start=False)
+    
+    # Initialize the model (replace 'X_sample' and 'y_sample' with actual data)
+    merged_model.partial_fit(minis['mini_x'], minis['mini_y'], classes=np.arange(10)) # just to initialize the variables    
+    # Set the averaged weights and biases
     merged_model.coefs_ = averaged_coefs
     merged_model.intercepts_ = averaged_intercepts
+
     return merged_model
+
 
 # Saves the new global model to minio
 def save_new_global_model(client, global_model_new):
@@ -260,14 +309,31 @@ def save_new_global_model(client, global_model_new):
         content_type="application/octet-stream"
     )
 
-
+# Usage: /learn?nclients=10&nrounds=10&nselected=5
 @app.route('/learn')
 def learn():
+    set_minis() # Needed for initializing the models upon each merge
+
+    args = request.args.to_dict()
+    app.logger.info(f"Received args: {args}")
+
+    nclients = 3
+    nrounds = 5
+    nselected = 3
+
+    if 'nclients' in args:
+        nclients = int(args['nclients'])
+    if 'nrounds' in args:
+        nrounds = int(args['nrounds'])
+    if 'nselected' in args:
+        nselected = int(args['nselected'])
+
+
     consumer = KafkaConsumer(
         'federated',
         bootstrap_servers=kafka_url,
         # auto_offset_reset='earliest', # Start reading from the earliest messages
-        group_id='federated_grp_6',
+        group_id='federated_grp_8',
         value_deserializer=lambda m: pickle.loads(m)
     )
     # Warm start needed for incremental learning
@@ -284,32 +350,50 @@ def learn():
     save_new_global_model(client, global_model)
 
     app.logger.info("Starting training")
-
-    training_rounds = 10
+    time.sleep(3)
+    
     accuracies = []
-    for i in range(1,training_rounds):
-        # Start training 
-        os.system(f"wsk -i action invoke learner --param split_nr {i}")
+    part_counter = 1 # points to the next data chunk to be trained on
+    for round in range(1,nrounds):
+        # Start training  
 
-        result_dict = None
+        if nclients < nselected:
+            nselected = nclients
+        
+        
+
+        for i in range(nclients):
+            status = os.system(f"wsk -i action invoke learner --param split_nr {part_counter % 50}")
+            if status != 0:
+                return "Error invoking learner", 500
+            part_counter+=1
+
         app.logger.info("Awaiting kafka answers")
         timeout = 10  # Set your timeout in seconds
         start_time = time.time()
 
-        # TODO : Wait for multiple messages (e.g. 5-10)
-        new_model = None
-        while True:
-            message = consumer.poll(timeout_ms=1000)  # Poll for 1000ms (1 second)
+        new_models = []
+        while len(new_models) < nselected:
+            app.logger.info("Starting polling")
+            message = consumer.poll()  # Timeout_ms blocks entirely for some reason
+            app.logger.info(f"Polling done, message : {message}")
             if message:
                 for _, messages in message.items():
                     for msg in messages:
                         new_model = msg.value
-                        break  # Exit after the first message is processed
+                        new_models.append(new_model)
+                        app.logger.info(f"Received {len(new_models)} out of {nselected})")
+                if len(new_models) >= nselected:
+                    break   # Exit after the first message is processed
                 break
+            app.logger.info("No message received, checking timeout, time difference is " + str(time.time() - start_time) + " seconds")
 
             if time.time() - start_time > timeout:
                 app.logger.info("Timeout reached, no message received.")
                 break
+
+            app.logger.info("No message received, sleeping")
+            time.sleep(1)
 
         
         # Aggregate when done ~ TODO
@@ -317,7 +401,12 @@ def learn():
         app.logger.info("Aggregating")
         
         #global_model = merge_models(global_model, new_model.coefs_, new_model.intercepts_)
-        global_model = new_model
+        
+        # global_model = new_model
+        if len(new_models) == 0:
+            app.logger.info("No new models received, exiting")
+            break
+        global_model = merge_models(new_models)
         preds = global_model.predict(test_set['images'])
         acc = accuracy_score(test_set['labels'], preds)
         accuracies.append(acc)
@@ -332,4 +421,4 @@ def learn():
     return f"Learned: Accuracies {accuracies}", 200
 
 if __name__ == '__main__':
-	app.run(debug=True)
+	app.run(debug=True, port=5001)

@@ -52,3 +52,6 @@ tmux send-keys -t $SESSION:Main 'kubectl port-forward pod/minio 9000:9090 -n min
 echo "Minio Reachable on http://localhost:9000 the username and password are : ${bold}minioadmin"
 echo "If it is unreachable try running the setup again (it might take a while to set the pod up)"
 
+echo "Creating service account for minio"
+./minio/add-service-account.sh
+
