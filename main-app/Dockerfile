@@ -19,6 +19,10 @@ RUN wsk property set --apihost owdev-nginx.openwhisk.svc.cluster.local
 
 RUN wsk property set --auth 23bc46b1-71f6-4ed5-8c54-816aa4f8c502:123zO3xZCLrMN6v2BKK1dXYFpXlPkccOFqm12CdAsMgRU4VrNZ9lyGVCGuMDGIwP
 
+RUN apt-get install -y vim
+
+RUN apt-get install -y lsof
+
 # Set the working directory for your application
 WORKDIR /app
 

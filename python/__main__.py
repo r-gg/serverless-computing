@@ -34,7 +34,8 @@ def train_mnist_model(minio_client, bucket_name, part_num, global_model):
 
     # Train neural network
     clf = global_model
-    clf.partial_fit(train_images, train_labels, classes=np.arange(10))
+    for i in range(200):
+        clf.partial_fit(train_images, train_labels, classes=np.arange(10))
     predictions = clf.predict(test_images)
     return accuracy_score(test_labels, predictions), clf
 

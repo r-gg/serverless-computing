@@ -16,6 +16,8 @@ from kafka.admin import KafkaAdminClient, NewTopic
 from kafka import KafkaProducer, KafkaConsumer
 import pickle
 import time
+import random
+
 
 app = Flask(__name__)
 
@@ -312,7 +314,8 @@ def save_new_global_model(client, global_model_new):
 # Usage: /learn?nclients=10&nrounds=10&nselected=5
 @app.route('/learn')
 def learn():
-    set_minis() # Needed for initializing the models upon each merge
+    if minis['mini_x'] is None:
+        set_minis() # Needed for initializing the models upon each merge
 
     args = request.args.to_dict()
     app.logger.info(f"Received args: {args}")
@@ -328,12 +331,12 @@ def learn():
     if 'nselected' in args:
         nselected = int(args['nselected'])
 
-
+    id = random.randint(0, 1000000)
     consumer = KafkaConsumer(
         'federated',
         bootstrap_servers=kafka_url,
         # auto_offset_reset='earliest', # Start reading from the earliest messages
-        group_id='federated_grp_8',
+        group_id=f'federated_grp_{id}',
         value_deserializer=lambda m: pickle.loads(m)
     )
     # Warm start needed for incremental learning
@@ -354,7 +357,7 @@ def learn():
     
     accuracies = []
     part_counter = 1 # points to the next data chunk to be trained on
-    for round in range(1,nrounds):
+    for round in range(nrounds):
         # Start training  
 
         if nclients < nselected:
@@ -363,7 +366,7 @@ def learn():
         
 
         for i in range(nclients):
-            status = os.system(f"wsk -i action invoke learner --param split_nr {part_counter % 50}")
+            status = os.system(f"wsk -i action invoke learner --param split_nr {(part_counter % 50) + 1}")
             if status != 0:
                 return "Error invoking learner", 500
             part_counter+=1
@@ -374,18 +377,16 @@ def learn():
 
         new_models = []
         while len(new_models) < nselected:
-            app.logger.info("Starting polling")
             message = consumer.poll()  # Timeout_ms blocks entirely for some reason
-            app.logger.info(f"Polling done, message : {message}")
             if message:
                 for _, messages in message.items():
                     for msg in messages:
                         new_model = msg.value
                         new_models.append(new_model)
                         app.logger.info(f"Received {len(new_models)} out of {nselected})")
+                        start_time = time.time() # Resetting the timer
                 if len(new_models) >= nselected:
                     break   # Exit after the first message is processed
-                break
             app.logger.info("No message received, checking timeout, time difference is " + str(time.time() - start_time) + " seconds")
 
             if time.time() - start_time > timeout:
@@ -395,17 +396,10 @@ def learn():
             app.logger.info("No message received, sleeping")
             time.sleep(1)
 
-        
-        # Aggregate when done ~ TODO
-        # Currently only the new model is taken as a new global model
-        app.logger.info("Aggregating")
-        
-        #global_model = merge_models(global_model, new_model.coefs_, new_model.intercepts_)
-        
-        # global_model = new_model
         if len(new_models) == 0:
             app.logger.info("No new models received, exiting")
             break
+        app.logger.info("Aggregating")        
         global_model = merge_models(new_models)
         preds = global_model.predict(test_set['images'])
         acc = accuracy_score(test_set['labels'], preds)

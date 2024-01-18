@@ -21,5 +21,3 @@ kubectl exec -n $MINIO_NAMESPACE $MINIO_POD_NAME -- /bin/sh <<EOF
     mc admin user svcacct add local minioadmin --access-key "$ACCESS_KEY" --secret-key "$SECRET_KEY"
 
 EOF
-
-echo "User $NEW_USER added to MinIO server"
