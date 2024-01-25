@@ -1,17 +1,14 @@
 import io
 import os
-from flask import Flask, jsonify, request
+from flask import Flask, request
 from sklearn.metrics import accuracy_score
-import sklearn
 from sklearn.neural_network import MLPClassifier
 from minio import Minio
 from minio.error import S3Error
 import numpy as np
 import gzip
 import json
-import pandas as pd
 import requests
-import logging 
 from kafka.admin import KafkaAdminClient, NewTopic
 from kafka import KafkaProducer, KafkaConsumer
 import pickle
@@ -20,8 +17,6 @@ import random
 
 
 app = Flask(__name__)
-
-
 # --------------- MinIO And dataset setup
 
 minio_access_key="minioadmin1"
@@ -29,15 +24,34 @@ minio_secret_key="minioadmin1"
 dataset_bucket_name = "dataset-bucket"
 global_model_bucket_name = "global-model-bucket"
 global_model_file_name = 'global-model.pkl'
-minis = {
-    "mini_x" : None,
-    "mini_y" : None
-}
 
-test_set = {
-    "images" : None,
-    "labels" : None
-}
+
+
+def upload_file_to_minio(minio_client, file_path, bucket_name, object_name):
+    """
+    Upload a file to a MinIO bucket.
+
+    Args:
+    minio_client (Minio): The Minio client configured to interact with your MinIO server.
+    file_path (str): The path to the file on your local filesystem that you want to upload.
+    bucket_name (str): The name of the bucket on MinIO where the file will be uploaded.
+    object_name (str): The object name or the path inside the bucket where the file will be uploaded.
+    """
+    
+    try:
+        # Open the file in binary read mode
+        with open(file_path, 'rb') as file_data:
+            file_stat = os.stat(file_path)
+            minio_client.put_object(
+                bucket_name,
+                object_name,
+                file_data,
+                file_stat.st_size,
+                content_type='application/octet-stream'
+            )
+        print(f"'{file_path}' is successfully uploaded as '{object_name}' to bucket '{bucket_name}'.")
+    except S3Error as e:
+        print(f"An error occurred: {e}")
 
 def download_mnist_files(url_base, file_names, save_dir):
     for file_name in file_names:
@@ -53,7 +67,7 @@ def download_mnist_files(url_base, file_names, save_dir):
 
 def extract_images_and_labels(image_file, label_file):
     with gzip.open(image_file, 'rb') as f:
-        images = np.frombuffer(f.read(), np.uint8, offset=16).reshape(-1, 28, 28)
+        images = np.frombuffer(f.read(), np.uint8, offset=16).reshape(-1, 784)
     
     with gzip.open(label_file, 'rb') as f:
         labels = np.frombuffer(f.read(), np.uint8, offset=8)
@@ -85,32 +99,6 @@ def save_gzipped_file(data, file_path):
     with gzip.open(file_path, 'wb') as f:
         f.write(data)
 
-def set_minis():
-    url_base = 'http://yann.lecun.com/exdb/mnist/'
-    test_file_names = ['t10k-images-idx3-ubyte.gz', 't10k-labels-idx1-ubyte.gz']
-
-    # Directory where to save the downloaded files
-    save_dir = 'MNIST_data'
-    os.makedirs(save_dir, exist_ok=True)
-
-    # Check if test files exist, if not download them
-    
-    file_path = os.path.join(save_dir, test_file_names[0])
-    if not os.path.exists(file_path):
-        download_mnist_files(url_base, test_file_names, save_dir)
-
-    # Load and extract data from test files
-    test_images, test_labels = extract_images_and_labels(os.path.join(save_dir, 't10k-images-idx3-ubyte.gz'),
-                                                         os.path.join(save_dir, 't10k-labels-idx1-ubyte.gz'))
-
-    # Set mini variables
-    minis['mini_x'] = test_images[0:2].reshape(-1, 784)
-    minis['mini_y'] = test_labels[0:2].reshape(-1,)
-    test_set['images'] = test_images.reshape(-1, 784)
-    test_set['labels'] = test_labels.reshape(-1,)
-
-    app.logger.info("Mini variables set")
-
 
 @app.route('/download-and-split-dataset')
 def download_dataset():
@@ -139,18 +127,11 @@ def download_dataset():
         test_images, test_labels = extract_images_and_labels(os.path.join(save_dir, 't10k-images-idx3-ubyte.gz'),
                                                             os.path.join(save_dir, 't10k-labels-idx1-ubyte.gz'))
 
-        minis['mini_x'] = test_images[0:2].reshape(-1, 784)
-        minis['mini_y'] = test_labels[0:2].reshape(-1,)
         app.logger.info(f"Training set (images, labels): {train_images.shape}, {train_labels.shape}")
         app.logger.info(f"Test set (images, labels): {test_images.shape}, {test_labels.shape}")
 
-        test_set['images'] = test_images.reshape(-1, 784)
-        test_set['labels'] = test_labels.reshape(-1,)
 
         split_and_save_dataset_locally(train_images, train_labels, test_images, test_labels, 50, 'split_mnist_data')
-    else:
-        app.logger.info("Split files already exist, loading minis")
-        set_minis()
     return "Downloaded and split", 200
 
 @app.route("/upload-splits")
@@ -220,6 +201,7 @@ def minio_setup():
 
     res_string = create_bucket(client, dataset_bucket_name, "")
     res_string += create_bucket(client, global_model_bucket_name, "")
+    res_string += create_bucket(client, global_model_bucket_name, "")
 
     
 
@@ -268,13 +250,7 @@ def setup_kafka():
         return "Kafka topic added", 200
     return "Kafka topic already exists", 200
 
-@app.route('/service')
-def service():
-    app.logger.info("Welcome to notification service")
-    return 'Notification Service',200
-
-
-def merge_models(models):
+def merge_models(models, sample_x, sample_y):
     # Ensure there is at least one model to merge
     if not models:
         raise ValueError("No models provided for merging")
@@ -285,13 +261,16 @@ def merge_models(models):
 
     # Create a new model with the averaged weights, using parameters from the first model
     first_model = models[0]
-    merged_model = MLPClassifier(hidden_layer_sizes=first_model.hidden_layer_sizes, activation=first_model.activation,
-                                 solver=first_model.solver, alpha=first_model.alpha, batch_size=first_model.batch_size,
-                                 learning_rate=first_model.learning_rate, max_iter=first_model.max_iter,
-                                 random_state=first_model.random_state, warm_start=False)
+    merged_model = first_model 
+    # MLPClassifier(hidden_layer_sizes=first_model.hidden_layer_sizes, activation=first_model.activation,
+    #                             solver=first_model.solver, alpha=first_model.alpha, batch_size=first_model.batch_size,
+    #                             learning_rate=first_model.learning_rate, max_iter=first_model.max_iter,
+    #                             random_state=first_model.random_state, warm_start=True)
     
-    # Initialize the model (replace 'X_sample' and 'y_sample' with actual data)
-    merged_model.partial_fit(minis['mini_x'], minis['mini_y'], classes=np.arange(10)) # just to initialize the variables    
+    # Just initializing the coefs
+    # merged_model.classes_ = sample_y.reshape(-1,)
+    # merged_model.partial_fit(sample_x, sample_y, classes=sample_y.reshape(-1,)) # just to initialize the variables    
+    # merged_model.classes_  = np.arange(10)
     # Set the averaged weights and biases
     merged_model.coefs_ = averaged_coefs
     merged_model.intercepts_ = averaged_intercepts
@@ -314,11 +293,19 @@ def save_new_global_model(client, global_model_new):
 # Usage: /learn?nclients=10&nrounds=10&nselected=5
 @app.route('/learn')
 def learn():
-    if minis['mini_x'] is None:
-        set_minis() # Needed for initializing the models upon each merge
-
     args = request.args.to_dict()
     app.logger.info(f"Received args: {args}")
+
+    test_images = None
+    test_labels = None
+    save_dir = 'MNIST_data'
+    if not os.path.exists(save_dir):
+        return "Dataset not downloaded", 500
+    else:
+        app.logger.info("Dataset already downloaded")
+        test_images, test_labels = extract_images_and_labels(os.path.join(save_dir, 't10k-images-idx3-ubyte.gz'),
+                                                            os.path.join(save_dir, 't10k-labels-idx1-ubyte.gz'))
+        test_images = test_images / 255.0
 
     nclients = 3
     nrounds = 5
@@ -340,9 +327,20 @@ def learn():
         value_deserializer=lambda m: pickle.loads(m)
     )
     # Warm start needed for incremental learning
-    global_model = MLPClassifier(hidden_layer_sizes=(50,), max_iter=50, solver='sgd', random_state=1, verbose=True, warm_start=False)
+    global_model = MLPClassifier(hidden_layer_sizes=(50,), 
+                                 max_iter=20, 
+                                 solver='sgd', 
+                                 random_state=1, 
+                                 verbose=True, 
+                                 warm_start=True,
+                                 learning_rate_init=0.01)
     # Just initializing the coefs
-    global_model.partial_fit(minis['mini_x'], minis['mini_y'], classes=np.arange(10)) # just to initialize the variables
+    app.logger.info("test_images[0].reshape(1, -1): " + str(test_images[0].reshape(1, -1)))
+    app.logger.info("test_labels[0].reshape(-1,1): " + str(test_labels[0].reshape(-1,1)))
+    
+    # global_model.partial_fit(test_images[0].reshape(1, -1), test_labels[0].reshape(-1,1), classes=test_labels[0].reshape(-1,)) # just to initialize the variables
+    
+    # global_model.classes_  = np.arange(10) # Needed for incremental learning
 
     # Save global model to MinIO
     client = Minio("minio-operator9000.minio-dev.svc.cluster.local:9000",
@@ -357,16 +355,15 @@ def learn():
     
     accuracies = []
     part_counter = 1 # points to the next data chunk to be trained on
+    training_start = time.time()
     for round in range(nrounds):
         # Start training  
 
         if nclients < nselected:
             nselected = nclients
         
-        
-
         for i in range(nclients):
-            status = os.system(f"wsk -i action invoke learner --param split_nr {(part_counter % 50) + 1}")
+            status = os.system(f"wsk -i action invoke learner --param split_nr {(part_counter % 50) + 1} --param round_nr {round}")
             if status != 0:
                 return "Error invoking learner", 500
             part_counter+=1
@@ -381,7 +378,12 @@ def learn():
             if message:
                 for _, messages in message.items():
                     for msg in messages:
-                        new_model = msg.value
+                        res = msg.value
+                        round_number = res['round_number']
+                        if round_number < round:
+                            app.logger.info(f"Received message from previous round {round_number}, ignoring because we are in round {round}")
+                            continue
+                        new_model = res['model']
                         new_models.append(new_model)
                         app.logger.info(f"Received {len(new_models)} out of {nselected})")
                         start_time = time.time() # Resetting the timer
@@ -400,10 +402,11 @@ def learn():
             app.logger.info("No new models received, exiting")
             break
         app.logger.info("Aggregating")        
-        global_model = merge_models(new_models)
-        preds = global_model.predict(test_set['images'])
-        acc = accuracy_score(test_set['labels'], preds)
+        global_model = merge_models(new_models, test_images[0].reshape(1, -1), test_labels[0].reshape(-1, 1))
+        preds = global_model.predict(test_images)
+        acc = accuracy_score(test_labels, preds)
         accuracies.append(acc)
+        app.logger.info(f"Round {round}: accuracy {acc}")
         app.logger.info("Saving new model")
         # Save new global Model
         save_new_global_model(client, global_model)
@@ -412,7 +415,14 @@ def learn():
 
 
     consumer.close()
-    return f"Learned: Accuracies {accuracies}", 200
+    training_end = time.time()
+    res = f"""
+    Rounds: {nrounds} \n
+    Clients: {nclients} \n
+    Selected: {nselected}  \n
+    Resulting Accuracies {accuracies} \n
+    Training time {training_end-training_start}"""
+    return res, 200
 
 if __name__ == '__main__':
-	app.run(debug=True, port=5001)
+	app.run(debug=True, port=5000)

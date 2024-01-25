@@ -45,6 +45,8 @@ echo "Starting kubernetes dashboard"
 
 tmux send-keys -t $SESSION:Kubernetes-dashboard 'kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.7.0/aio/deploy/recommended.yaml' C-m
 
+tmux send-keys -t $SESSION:Kubernetes-dashboard 'cd kube-dashboard' C-m
+
 tmux send-keys -t $SESSION:Kubernetes-dashboard 'kubectl apply -f dashboard-adminuser.yaml && kubectl apply -f dashboard-cluster-role-binding.yaml && kubectl apply -f dashboard-admin-secret.yaml' C-m
 
 tmux send-keys -t $SESSION:Kubernetes-dashboard 'kubectl proxy -p 8001' C-m
@@ -100,4 +102,4 @@ echo "User $NEW_USER added to MinIO server"
 
 
 # Attach session, on the Main window
-tmux attach-session -t $SESSION:0
+# tmux attach-session -t $SESSION:0

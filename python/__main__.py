@@ -33,9 +33,17 @@ def train_mnist_model(minio_client, bucket_name, part_num, global_model):
     test_labels = download_and_extract(minio_client, bucket_name, f'part{part_num}_mnist_test_labels.gz', os.path.join(local_dir, 'test_labels.gz'))
 
     # Train neural network
+    print(f"train images shape: {train_images.shape}", flush=True)
+
+
     clf = global_model
-    for i in range(200):
+    train_images = train_images / 255.0
+    for i in range(50):
         clf.partial_fit(train_images, train_labels, classes=np.arange(10))
+    
+    print(f"test images shape: {test_images.shape}", flush=True)
+    
+    test_images = test_images / 255.0
     predictions = clf.predict(test_images)
     return accuracy_score(test_labels, predictions), clf
 
@@ -43,6 +51,8 @@ def train_mnist_model(minio_client, bucket_name, part_num, global_model):
 def main(args):
     # print(args)
     part_number = args.get("split_nr",1)
+    round_number = args.get("round_nr",1)
+    activation_id = os.getenv('__OW_ACTIVATION_ID', '0')
     producer = KafkaProducer(
         bootstrap_servers=kafka_url,
         value_serializer=lambda v: pickle.dumps(v)
@@ -67,11 +77,12 @@ def main(args):
 
     # Deserialize the data
     global_model = pickle.loads(serialized_data)
+    print(f"Warm start value of global model: {global_model.warm_start}",flush=True)
 
     accuracy, model = train_mnist_model(client, dataset_bucket_name, part_number, global_model)
     
 
-    producer.send('federated', model)
+    producer.send('federated', {"model": model, "round_number": round_number })
     producer.flush()
 
     return { "res": f"Done training on part {part_number}, local test accuracy: {accuracy}" }

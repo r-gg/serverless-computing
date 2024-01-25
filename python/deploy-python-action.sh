@@ -12,4 +12,4 @@ fi
 
 zip $1.zip __main__.py
 
-wsk -i action create $1 --docker rggg1/python11action $1.zip
+wsk -i action create $1 --docker rggg1/python11action $1.zip --timeout 300000

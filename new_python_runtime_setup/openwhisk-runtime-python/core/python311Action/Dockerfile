@@ -48,6 +48,10 @@ COPY requirements.txt requirements.txt
 RUN pip3 install --upgrade pip six wheel &&\
     pip3 install --no-cache-dir -r requirements.txt
 
+# Install tensorflow
+# RUN pip3 install tensorflow --no-deps &&\
+#    pip3 install numpy six protobuf wrapt absl-py termcolor wheel grpcio h5py
+
 RUN mkdir -p /action
 WORKDIR /
 

@@ -12,12 +12,10 @@ MINIO_ROOT_PASSWORD="minioadmin"
 ACCESS_KEY="minioadmin1"
 SECRET_KEY="minioadmin1"
 
+tmux new-window -t Minio:3 -n 'akg'
+
 # Execute commands inside the MinIO pod
-kubectl exec -n $MINIO_NAMESPACE $MINIO_POD_NAME -- /bin/sh <<EOF
+tmux send-keys -t Minio:akg "kubectl exec -i -n $MINIO_NAMESPACE $MINIO_POD_NAME -- /bin/sh" C-m
+tmux send-keys -t Minio:akg "mc alias set local http://localhost:9000 $MINIO_ROOT_USER $MINIO_ROOT_PASSWORD" C-m
+tmux send-keys -t Minio:akg "mc admin user svcacct add local minioadmin --access-key "$ACCESS_KEY" --secret-key "$SECRET_KEY"" C-m
 
-    # Set alias for MinIO server
-    mc alias set local http://localhost:9000 $MINIO_ROOT_USER $MINIO_ROOT_PASSWORD
-
-    mc admin user svcacct add local minioadmin --access-key "$ACCESS_KEY" --secret-key "$SECRET_KEY"
-
-EOF
