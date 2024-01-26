@@ -201,7 +201,6 @@ def minio_setup():
 
     res_string = create_bucket(client, dataset_bucket_name, "")
     res_string += create_bucket(client, global_model_bucket_name, "")
-    res_string += create_bucket(client, global_model_bucket_name, "")
 
     
 

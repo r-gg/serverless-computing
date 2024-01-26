@@ -8,14 +8,20 @@
 
 cd main-app && \
 
-./build-and-start-main-app.sh
+./start-main-app.sh
 
 cd ../python && \
 
 ./deploy-python-action.sh learner && \
 
 # Prewarming the action
+
+echo "Prewarming the action"
+
 wsk -i action invoke learner --result 
+wsk -i action invoke learner --result 
+
+echo "Prewarming done, setting up resources needed for FL"
 
 curl http://localhost:5000/build-everything && \
 

@@ -1,5 +1,7 @@
 #!/bin/bash
 
+cd ..
+
 SESSION="Minio"
 
 bold=$(tput bold)

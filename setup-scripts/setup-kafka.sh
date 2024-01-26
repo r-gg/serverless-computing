@@ -1,5 +1,7 @@
 #!/bin/bash
 
+cd ..
+
 SESSION="Kafka"
 
 bold=$(tput bold)
