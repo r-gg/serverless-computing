@@ -23,6 +23,8 @@ RUN apt-get install -y vim
 
 RUN apt-get install -y lsof
 
+RUN apt-get install -y net-tools
+
 # Set the working directory for your application
 WORKDIR /app
 

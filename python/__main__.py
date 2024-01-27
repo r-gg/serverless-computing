@@ -26,20 +26,21 @@ def train_mnist_model(minio_client, bucket_name, part_num, global_model):
     os.makedirs(local_dir, exist_ok=True)
 
     # Download and load dataset parts
-    train_images = download_and_extract(minio_client, bucket_name, f'part{part_num}_mnist_train_images.gz', os.path.join(local_dir, 'train_images.gz'))
-    train_labels = download_and_extract(minio_client, bucket_name, f'part{part_num}_mnist_train_labels.gz', os.path.join(local_dir, 'train_labels.gz'))
-    test_images = download_and_extract(minio_client, bucket_name, f'part{part_num}_mnist_test_images.gz', os.path.join(local_dir, 'test_images.gz'))
-    test_labels = download_and_extract(minio_client, bucket_name, f'part{part_num}_mnist_test_labels.gz', os.path.join(local_dir, 'test_labels.gz'))
+    train_images = download_and_extract(minio_client, bucket_name, f'part{part_num}_emnist_train_images.gz', os.path.join(local_dir, 'train_images.gz'))
+    train_labels = download_and_extract(minio_client, bucket_name, f'part{part_num}_emnist_train_labels.gz', os.path.join(local_dir, 'train_labels.gz'))
+    # test_images = download_and_extract(minio_client, bucket_name, f'part{part_num}_emnist_test_images.gz', os.path.join(local_dir, 'test_images.gz'))
+    # test_labels = download_and_extract(minio_client, bucket_name, f'part{part_num}_emnist_test_labels.gz', os.path.join(local_dir, 'test_labels.gz'))
 
+    print(f"Number of training images: {train_images.shape[0]}", flush=True)
     # Train neural network
     clf = global_model
     train_images = train_images / 255.0
     for i in range(50):
         clf.partial_fit(train_images, train_labels, classes=np.arange(10))
     
-    test_images = test_images / 255.0
-    predictions = clf.predict(test_images)
-    return accuracy_score(test_labels, predictions), clf
+    #test_images = test_images / 255.0
+    #predictions = clf.predict(test_images)
+    return clf
 
 
 def main(args):
@@ -66,7 +67,7 @@ def main(args):
     global_model = pickle.loads(serialized_data)
     print(f"Warm start value of global model: {global_model.warm_start}",flush=True)
 
-    accuracy, model = train_mnist_model(client, dataset_bucket_name, part_number, global_model)
+    model = train_mnist_model(client, dataset_bucket_name, part_number, global_model)
     
     message = {
         "model": model, 
@@ -75,7 +76,7 @@ def main(args):
     producer.send('federated', message)
     producer.flush()
 
-    return { "res": f"Done training on part {part_number}, local test accuracy: {accuracy}" }
+    return { "res": f"Done training on part {part_number}" }
 
 
 if __name__ == '__main__':

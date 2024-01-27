@@ -14,7 +14,7 @@ cd ../main-app && \
 
 cd ../python && \
 
-./deploy-python-action.sh learner --memory 256 && \
+./deploy-python-action.sh learner --memory 512 --timeout 60000 && \
 
 # Prewarming the action
 

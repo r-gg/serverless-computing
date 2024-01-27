@@ -4,7 +4,7 @@
 
 ## Technologies used
 
-| Purose | Technology |
+| Purpose | Technology |
 | ------ | ---------- |
 | Serverless platform | Openwhisk |
 | Object Storage |  Minio |

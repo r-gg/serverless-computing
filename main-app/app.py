@@ -10,11 +10,12 @@ import gzip
 import json
 import requests
 from kafka.admin import KafkaAdminClient, NewTopic
-from kafka import KafkaProducer, KafkaConsumer
+from kafka import KafkaConsumer
 import pickle
 import time
 import random
-
+import zipfile
+from io import BytesIO
 
 app = Flask(__name__)
 
@@ -30,6 +31,7 @@ admin_client = KafkaAdminClient(
     client_id='myAdminClient' # can be set to any value
 )
 
+n_splits = 100
 
 
 def download_mnist_files(url_base, file_names, save_dir):
@@ -43,6 +45,24 @@ def download_mnist_files(url_base, file_names, save_dir):
             app.logger.info(f"Downloaded {file_name}")
         else:
             app.logger.info(f"Failed to download {file_name}")
+
+def download_emnist_files(url, file_names, save_dir):
+    """
+    url - URL of the zip file containing the EMNIST dataset
+    (https://rds.westernsydney.edu.au/Institutes/MARCS/BENS/EMNIST/emnist-gzip.zip)
+    """
+    response = requests.get(url, stream=True, verify=False)
+    if response.status_code == 200:
+        with zipfile.ZipFile(BytesIO(response.content)) as thezip:
+            for file_name in file_names:
+                thezip.extract(file_name, path=save_dir)
+                # Move files from 'gzip' subdirectory to the desired directory and remove the 'gzip' subdirectory
+                extracted_file_path = os.path.join(save_dir, file_name)
+                target_file_path = os.path.join(save_dir, os.path.basename(file_name).replace('emnist-digits-', ''))
+                os.rename(extracted_file_path, target_file_path)
+            print(f"Extracted: {', '.join([os.path.basename(file_name) for file_name in file_names])}")
+    else:
+        print(f"Failed to download from {url}")
 
 def extract_images_and_labels(image_file, label_file):
     with gzip.open(image_file, 'rb') as f:
@@ -64,12 +84,12 @@ def split_and_save_dataset_locally(images, labels, test_images, test_labels, par
         part_indices = indices[i*size:(i+1)*size] if i < parts - 1 else indices[i*size:]
 
         # Save train images and labels
-        save_gzipped_file(images[part_indices], os.path.join(directory, f'part{i+1}_mnist_train_images.gz'))
-        save_gzipped_file(labels[part_indices], os.path.join(directory, f'part{i+1}_mnist_train_labels.gz'))
+        save_gzipped_file(images[part_indices], os.path.join(directory, f'part{i+1}_emnist_train_images.gz'))
+        save_gzipped_file(labels[part_indices], os.path.join(directory, f'part{i+1}_emnist_train_labels.gz'))
 
         # Save test images and labels (same test set for each part)
-        save_gzipped_file(test_images, os.path.join(directory, f'part{i+1}_mnist_test_images.gz'))
-        save_gzipped_file(test_labels, os.path.join(directory, f'part{i+1}_mnist_test_labels.gz'))
+        # save_gzipped_file(test_images, os.path.join(directory, f'part{i+1}_emnist_test_images.gz'))
+        # save_gzipped_file(test_labels, os.path.join(directory, f'part{i+1}_emnist_test_labels.gz'))
 
 def save_gzipped_file(data, file_path):
     # Ensure the directory exists
@@ -81,37 +101,39 @@ def save_gzipped_file(data, file_path):
 
 @app.route('/download-and-split-dataset')
 def download_dataset():
-    url_base = 'http://yann.lecun.com/exdb/mnist/'
-    file_names = ['train-images-idx3-ubyte.gz', 'train-labels-idx1-ubyte.gz',
-                't10k-images-idx3-ubyte.gz', 't10k-labels-idx1-ubyte.gz']
+    url = 'https://rds.westernsydney.edu.au/Institutes/MARCS/BENS/EMNIST/emnist-gzip.zip'
+    digit_files = [
+        'gzip/emnist-digits-train-images-idx3-ubyte.gz',
+        'gzip/emnist-digits-train-labels-idx1-ubyte.gz',
+        'gzip/emnist-digits-test-images-idx3-ubyte.gz',
+        'gzip/emnist-digits-test-labels-idx1-ubyte.gz'
+    ]
 
     # Directory where to save the downloaded files
-    save_dir = 'MNIST_data'
+    save_dir = 'EMNIST_data'
     os.makedirs(save_dir, exist_ok=True)
 
     # Download MNIST dataset files only if all four files are missing
-    missing_files = [not os.path.exists(os.path.join(save_dir, file_name)) for file_name in file_names]
-    if any(missing_files):
-        download_mnist_files(url_base, file_names, save_dir)
-    else:
-        app.logger.info("MNIST dataset files already exist")
+    download_emnist_files(url, digit_files, save_dir)
 
     # Perform splitting only if all 200 split files are missing    
-    split_dir = 'split_mnist_data'
+    split_dir = 'split_emnist_data'
 
     if not os.path.exists(split_dir) or len(os.listdir(split_dir)) != 200:
         # Load and extract data
         train_images, train_labels = extract_images_and_labels(os.path.join(save_dir, 'train-images-idx3-ubyte.gz'),
                                                             os.path.join(save_dir, 'train-labels-idx1-ubyte.gz'))
-        test_images, test_labels = extract_images_and_labels(os.path.join(save_dir, 't10k-images-idx3-ubyte.gz'),
-                                                            os.path.join(save_dir, 't10k-labels-idx1-ubyte.gz'))
+        test_images, test_labels = extract_images_and_labels(os.path.join(save_dir, 'test-images-idx3-ubyte.gz'),
+                                                            os.path.join(save_dir, 'test-labels-idx1-ubyte.gz'))
 
         app.logger.info(f"Training set (images, labels): {train_images.shape}, {train_labels.shape}")
         app.logger.info(f"Test set (images, labels): {test_images.shape}, {test_labels.shape}")
 
 
-        split_and_save_dataset_locally(train_images, train_labels, test_images, test_labels, 50, 'split_mnist_data')
+        split_and_save_dataset_locally(train_images, train_labels, test_images, test_labels, n_splits, split_dir)
     return "Downloaded and split", 200
+
+
 
 @app.route("/upload-splits")
 def upload_splits_to_minio():
@@ -126,11 +148,11 @@ def upload_splits_to_minio():
     res_str = create_bucket(client, bucket_name, "")
 
     app.logger.info(f"Uploading to the minio bucket")
-    for i in range(1, 51):
-        app.logger.info(f"Uploaded {i-1} out of 50")
-        for file_type in ['train_images', 'train_labels', 'test_images', 'test_labels']:
-            file_name = f'part{i}_mnist_{file_type}.gz'
-            file_path = f'split_mnist_data/{file_name}'
+    for i in range(1, (n_splits + 1)):
+        app.logger.info(f"Uploaded {i-1} out of {n_splits}")
+        for file_type in ['train_images', 'train_labels']:
+            file_name = f'part{i}_emnist_{file_type}.gz'
+            file_path = f'split_emnist_data/{file_name}'
             client.fput_object(bucket_name, file_name, file_path)
     return res_str + "\nUploaded splits to the new minio bucket", 200
 
@@ -240,13 +262,13 @@ def learn():
 
     test_images = None
     test_labels = None
-    save_dir = 'MNIST_data'
+    save_dir = 'EMNIST_data'
     if not os.path.exists(save_dir):
         return "Dataset not downloaded", 500
     else:
         app.logger.info("Dataset already downloaded")
-        test_images, test_labels = extract_images_and_labels(os.path.join(save_dir, 't10k-images-idx3-ubyte.gz'),
-                                                            os.path.join(save_dir, 't10k-labels-idx1-ubyte.gz'))
+        test_images, test_labels = extract_images_and_labels(os.path.join(save_dir, 'test-images-idx3-ubyte.gz'),
+                                                            os.path.join(save_dir, 'test-labels-idx1-ubyte.gz'))
         test_images = test_images / 255.0
 
     nclients = 3
@@ -287,24 +309,26 @@ def learn():
 
     app.logger.info("Starting training")
     time.sleep(3)
-    
+    timeout = 30  # seconds
+
     accuracies = []
     part_counter = 1 # points to the next data chunk to be trained on
     training_start = time.time()
+    timed_out = False
     for round in range(nrounds):
         # Start training  
+        
 
         if nclients < nselected:
             nselected = nclients
         
         for i in range(nclients):
-            status = os.system(f"wsk -i action invoke learner --param split_nr {(part_counter % 50) + 1} --param round_nr {round}")
+            status = os.system(f"wsk -i action invoke learner --param split_nr {(part_counter % n_splits) + 1} --param round_nr {round}")
             if status != 0:
                 return "Error invoking learner", 500
             part_counter+=1
 
         app.logger.info("Awaiting kafka answers")
-        timeout = 10  # Set your timeout in seconds
         start_time = time.time()
 
         new_models = []
@@ -328,10 +352,15 @@ def learn():
 
             if time.time() - start_time > timeout:
                 app.logger.info("Timeout reached, no message received.")
+                timed_out = True
                 break
 
             app.logger.info("No message received, sleeping")
             time.sleep(1)
+
+        if timed_out:
+            
+            break
 
         if len(new_models) == 0:
             app.logger.info("No new models received, exiting")
@@ -350,6 +379,8 @@ def learn():
 
 
     consumer.close()
+    if timed_out:
+        return "Timeout reached", 500
     training_end = time.time()
     res = f"""
     Rounds: {nrounds} \n
