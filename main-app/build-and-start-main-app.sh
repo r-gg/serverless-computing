@@ -1,29 +1,14 @@
 #!/bin/bash
 
-SESSION=main-app
-
-
-SESSIONEXISTS=$(tmux list-sessions | grep $SESSION)
-
-# Only create tmux SESSION if it doesn't already exist
-if [ -n "$SESSIONEXISTS" ]
-then
-    tmux kill-session -t $SESSION
-fi
-
-tmux new-session -d -s $SESSION
-
-tmux new-window -t $SESSION:1 -n 'App'
 
 echo "Building docker image and pushing it to hub"
 
-tmux send-keys -t $SESSION:App 'docker build -t main-app .' C-m
+docker build -t main-app .
 
-tmux send-keys -t $SESSION:App 'docker tag main-app rggg1/main-app' C-m
+docker tag main-app rggg1/main-app
 
-tmux send-keys -t $SESSION:App 'docker push rggg1/main-app' C-m
+docker push rggg1/main-app
 
-tmux new-window -t $SESSION:2 -n 'Test'
 
 echo "Applying the deployment"
 
@@ -36,6 +21,22 @@ kubectl apply -f deployment.yml -n main-app
 kubectl rollout status deployment main-app -n main-app
 
 echo "Deployment attempt finished, forwarding pod port 5000 to localhost:5000"
+
+SESSION=main-app
+
+
+SESSIONEXISTS=$(tmux list-sessions | grep $SESSION)
+
+# Only create tmux SESSION if it doesn't already exist
+if [ -n "$SESSIONEXISTS" ]
+then
+    tmux kill-session -t $SESSION
+fi
+
+
+tmux new-window -t $SESSION:1 -n 'App'
+
+tmux new-window -t $SESSION:2 -n 'Test'
 
 tmux send-keys -t $SESSION:App 'kubectl port-forward -n main-app $(kubectl get pods -n main-app | tail -n +2 | awk '\''{print $1; exit}'\'') 5000:5000' C-m
 

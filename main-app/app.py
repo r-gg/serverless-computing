@@ -17,41 +17,20 @@ import random
 
 
 app = Flask(__name__)
-# --------------- MinIO And dataset setup
 
 minio_access_key="minioadmin1"
 minio_secret_key="minioadmin1"
 dataset_bucket_name = "dataset-bucket"
 global_model_bucket_name = "global-model-bucket"
 global_model_file_name = 'global-model.pkl'
+kafka_url = "kafkica.openwhisk.svc.cluster.local"
+
+admin_client = KafkaAdminClient(
+    bootstrap_servers=kafka_url, 
+    client_id='myAdminClient' # can be set to any value
+)
 
 
-
-def upload_file_to_minio(minio_client, file_path, bucket_name, object_name):
-    """
-    Upload a file to a MinIO bucket.
-
-    Args:
-    minio_client (Minio): The Minio client configured to interact with your MinIO server.
-    file_path (str): The path to the file on your local filesystem that you want to upload.
-    bucket_name (str): The name of the bucket on MinIO where the file will be uploaded.
-    object_name (str): The object name or the path inside the bucket where the file will be uploaded.
-    """
-    
-    try:
-        # Open the file in binary read mode
-        with open(file_path, 'rb') as file_data:
-            file_stat = os.stat(file_path)
-            minio_client.put_object(
-                bucket_name,
-                object_name,
-                file_data,
-                file_stat.st_size,
-                content_type='application/octet-stream'
-            )
-        print(f"'{file_path}' is successfully uploaded as '{object_name}' to bucket '{bucket_name}'.")
-    except S3Error as e:
-        print(f"An error occurred: {e}")
 
 def download_mnist_files(url_base, file_names, save_dir):
     for file_name in file_names:
@@ -201,24 +180,6 @@ def minio_setup():
 
     res_string = create_bucket(client, dataset_bucket_name, "")
     res_string += create_bucket(client, global_model_bucket_name, "")
-
-    
-
-    # Attempt to upload from an anonymous client
-    anon_client = Minio("minio-operator9000.minio-dev.svc.cluster.local:9000",
-                        secure=False)
-    
-    app.logger.info("connected with anon client")
-    try:
-        result = anon_client.put_object(
-            dataset_bucket_name, "my-object", io.BytesIO(b"hello"), 5, 
-        )
-        res_string += "created {0} object; etag: {1}, version-id: {2}".format(
-            result.object_name, result.etag, result.version_id,
-        )
-    except S3Error as err:
-        app.logger.info(err)
-
     
     return res_string, 200
 
@@ -230,14 +191,6 @@ def build_everything():
     setup_kafka()
     return "Minio is set, dataset splits uploaded to minio and kafka topic added", 200
 
-# ------------------ Kafka
-
-kafka_url = "kafkica.openwhisk.svc.cluster.local"
-
-admin_client = KafkaAdminClient(
-    bootstrap_servers=kafka_url, 
-    client_id='myAdminClient' # can be set to any value
-)
 
 
 
@@ -261,16 +214,6 @@ def merge_models(models, sample_x, sample_y):
     # Create a new model with the averaged weights, using parameters from the first model
     first_model = models[0]
     merged_model = first_model 
-    # MLPClassifier(hidden_layer_sizes=first_model.hidden_layer_sizes, activation=first_model.activation,
-    #                             solver=first_model.solver, alpha=first_model.alpha, batch_size=first_model.batch_size,
-    #                             learning_rate=first_model.learning_rate, max_iter=first_model.max_iter,
-    #                             random_state=first_model.random_state, warm_start=True)
-    
-    # Just initializing the coefs
-    # merged_model.classes_ = sample_y.reshape(-1,)
-    # merged_model.partial_fit(sample_x, sample_y, classes=sample_y.reshape(-1,)) # just to initialize the variables    
-    # merged_model.classes_  = np.arange(10)
-    # Set the averaged weights and biases
     merged_model.coefs_ = averaged_coefs
     merged_model.intercepts_ = averaged_intercepts
 
@@ -333,13 +276,6 @@ def learn():
                                  verbose=True, 
                                  warm_start=True,
                                  learning_rate_init=0.01)
-    # Just initializing the coefs
-    app.logger.info("test_images[0].reshape(1, -1): " + str(test_images[0].reshape(1, -1)))
-    app.logger.info("test_labels[0].reshape(-1,1): " + str(test_labels[0].reshape(-1,1)))
-    
-    # global_model.partial_fit(test_images[0].reshape(1, -1), test_labels[0].reshape(-1,1), classes=test_labels[0].reshape(-1,)) # just to initialize the variables
-    
-    # global_model.classes_  = np.arange(10) # Needed for incremental learning
 
     # Save global model to MinIO
     client = Minio("minio-operator9000.minio-dev.svc.cluster.local:9000",
