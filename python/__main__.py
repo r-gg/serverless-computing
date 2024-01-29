@@ -5,6 +5,7 @@ from sklearn.metrics import accuracy_score
 import numpy as np
 import gzip
 import os
+import time
 import pickle
 from kafka import KafkaProducer
 
@@ -28,9 +29,7 @@ def train_mnist_model(minio_client, bucket_name, part_num, global_model):
     # Download and load dataset parts
     train_images = download_and_extract(minio_client, bucket_name, f'part{part_num}_emnist_train_images.gz', os.path.join(local_dir, 'train_images.gz'))
     train_labels = download_and_extract(minio_client, bucket_name, f'part{part_num}_emnist_train_labels.gz', os.path.join(local_dir, 'train_labels.gz'))
-    # test_images = download_and_extract(minio_client, bucket_name, f'part{part_num}_emnist_test_images.gz', os.path.join(local_dir, 'test_images.gz'))
-    # test_labels = download_and_extract(minio_client, bucket_name, f'part{part_num}_emnist_test_labels.gz', os.path.join(local_dir, 'test_labels.gz'))
-
+    
     print(f"Number of training images: {train_images.shape[0]}", flush=True)
     # Train neural network
     clf = global_model
@@ -38,12 +37,14 @@ def train_mnist_model(minio_client, bucket_name, part_num, global_model):
     for i in range(50):
         clf.partial_fit(train_images, train_labels, classes=np.arange(10))
     
-    #test_images = test_images / 255.0
-    #predictions = clf.predict(test_images)
-    return clf
+    
+    predictions = clf.predict(train_images)
+    train_accuracy = accuracy_score(train_labels, predictions)
+    return train_accuracy,  clf
 
 
 def main(args):
+    start_time = time.time()
     part_number = args.get("split_nr",1)
     round_number = args.get("round_nr",1)
     producer = KafkaProducer(
@@ -67,11 +68,14 @@ def main(args):
     global_model = pickle.loads(serialized_data)
     print(f"Warm start value of global model: {global_model.warm_start}",flush=True)
 
-    model = train_mnist_model(client, dataset_bucket_name, part_number, global_model)
+    train_accuracy, model = train_mnist_model(client, dataset_bucket_name, part_number, global_model)
     
+    duration = time.time() - start_time
     message = {
         "model": model, 
-        "round_number": round_number
+        "round_number": round_number,
+        "train_accuracy": train_accuracy,
+        "activation_duration": duration
     }
     producer.send('federated', message)
     producer.flush()

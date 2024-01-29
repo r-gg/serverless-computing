@@ -22,9 +22,13 @@ app = Flask(__name__)
 minio_access_key="minioadmin1"
 minio_secret_key="minioadmin1"
 dataset_bucket_name = "dataset-bucket"
+
+results_bucket_name = "results-bucket"
+
 global_model_bucket_name = "global-model-bucket"
 global_model_file_name = 'global-model.pkl'
 kafka_url = "kafkica.openwhisk.svc.cluster.local"
+
 
 admin_client = KafkaAdminClient(
     bootstrap_servers=kafka_url, 
@@ -202,6 +206,7 @@ def minio_setup():
 
     res_string = create_bucket(client, dataset_bucket_name, "")
     res_string += create_bucket(client, global_model_bucket_name, "")
+    res_string += create_bucket(client, results_bucket_name, "")
     
     return res_string, 200
 
@@ -315,13 +320,17 @@ def learn():
     part_counter = 1 # points to the next data chunk to be trained on
     training_start = time.time()
     timed_out = False
+    train_accuracies = [] # list of lists. each list contains the train accuracies of the clients of one round
+    train_round_durations = []
+    activation_durations = []
     for round in range(nrounds):
         # Start training  
         
 
         if nclients < nselected:
             nselected = nclients
-        
+        start_time = time.time()
+        round_start_time = time.time()
         for i in range(nclients):
             status = os.system(f"wsk -i action invoke learner --param split_nr {(part_counter % n_splits) + 1} --param round_nr {round}")
             if status != 0:
@@ -329,9 +338,12 @@ def learn():
             part_counter+=1
 
         app.logger.info("Awaiting kafka answers")
-        start_time = time.time()
+        
 
         new_models = []
+        current_train_accuracies = []
+        current_activation_durations = []
+
         while len(new_models) < nselected:
             message = consumer.poll()  # Timeout_ms blocks entirely for some reason
             if message:
@@ -344,6 +356,8 @@ def learn():
                             continue
                         new_model = res['model']
                         new_models.append(new_model)
+                        current_train_accuracies.append(res['train_accuracy'])
+                        current_activation_durations.append(res['activation_duration'])
                         app.logger.info(f"Received {len(new_models)} out of {nselected})")
                         start_time = time.time() # Resetting the timer
                 if len(new_models) >= nselected:
@@ -359,7 +373,6 @@ def learn():
             time.sleep(1)
 
         if timed_out:
-            
             break
 
         if len(new_models) == 0:
@@ -371,23 +384,50 @@ def learn():
         acc = accuracy_score(test_labels, preds)
         accuracies.append(acc)
         app.logger.info(f"Round {round}: accuracy {acc}")
+        train_accuracies.append(current_train_accuracies)
+        activation_durations.append(current_activation_durations)
         app.logger.info("Saving new model")
+        train_round_durations.append(time.time() - round_start_time)
         # Save new global Model
         save_new_global_model(client, global_model)
-
-
-
 
     consumer.close()
     if timed_out:
         return "Timeout reached", 500
     training_end = time.time()
+    training_time = training_end - training_start
+    memory = 512
+    result = {
+        "rounds": nrounds,
+        "clients": nclients,
+        "selected": nselected,
+        "accuracies": accuracies,
+        "train_accuracies": train_accuracies,
+        "training_time": training_time,
+        "timed_out": timed_out,
+        "train_round_durations": train_round_durations,
+        "activation_durations": activation_durations,
+        "memory" : memory
+    }
+    # Save result to MinIO
+    serialized_data = pickle.dumps(result)
+
+    app.logger.info("Saving result to MinIO bucket")
+    client.put_object(
+        results_bucket_name,
+        f'result_rounds_{nrounds}_clients_{nclients}_selected_{nselected}_memory_{memory}.pkl',
+        data=io.BytesIO(serialized_data),
+        length=len(serialized_data),
+        content_type="application/octet-stream"
+    )
+
+    
     res = f"""
     Rounds: {nrounds} \n
     Clients: {nclients} \n
     Selected: {nselected}  \n
     Resulting Accuracies {accuracies} \n
-    Training time {training_end-training_start}"""
+    Training time {training_time}"""
     return res, 200
 
 if __name__ == '__main__':
