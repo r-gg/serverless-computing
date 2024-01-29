@@ -22,6 +22,8 @@
         Title,
         Tooltip,
     } from 'chart.js';
+    import UpdatesView from "$lib/UpdatesView.svelte";
+    import ClientsView from "$lib/ClientsView.svelte";
 
     ChartJS.register(
         Title,
@@ -38,8 +40,6 @@
     // TODO: extract WebsocketCreationForm into Component
     // TODO: extract TrainingForm into component
     // TODO: handle all training round updates in their own component
-    // TODO: create custom component for client cards
-    // TODO: create custom component for update cards
 
     let url: string = '';
     let accuracy: AccuracyUpdate[] = [];
@@ -50,14 +50,7 @@
     let connectionIsPending: boolean = false;
     let isConnected: boolean = false;
     let chartRef: any;
-    let accuracyData = {
-        labels: [],
-        datasets: [{
-            label: "Current training",
-            borderColor: '#f97316',
-            data: []
-        }]
-    }
+    let accuracyData = initAccuracyData()
 
     function connect(): void {
         if (!url) {
@@ -69,10 +62,7 @@
             connectionIsPending = true
             socket = ioClient(url)
             socket.connect()
-            fetch("http://127.0.0.1:8080/get_clients")
-                .then(res => res.json())
-                .then(data => clients = data)
-                .catch(error => console.error(error))
+            getClients()
             connectionIsPending = false
         } catch (error: any) {
             console.error(error)
@@ -101,13 +91,13 @@
         });
 
         socket.on("connect", () => {
-            console.log("connected")
             isConnected = socket?.connected || true
+            console.log("connected")
         });
 
-        socket.on("disconnect", (reason) => {
-            console.log("disconnected")
+        socket.on("disconnect", () => {
             isConnected = socket?.connected || false
+            console.log("disconnected")
         });
 
         socket.on("connect_error", (socket) => {
@@ -116,32 +106,60 @@
         });
     }
 
-    function addDataToChart(chart: any, label: string, newData: number) {
-        chart?.data.labels.push(label);
+    function getClients() {
+        fetch("http://127.0.0.1:8080/get_clients")
+            .then(res => res.json())
+            .then(data => clients = data)
+            .catch(error => console.error(error))
+    }
+
+    function addDataToChart(chart: any, label: number, newData: number) {
+        chart?.data.labels.push(`${label}`);
         chart?.data.datasets.forEach((dataset) => {
             dataset.data.push(newData);
         });
         chart?.update();
     }
 
+    function initAccuracyData() {
+        return {
+            labels: [],
+            datasets: [{
+                label: "Current training",
+                borderColor: '#f97316',
+                data: []
+            }]
+        }
+    }
+
     function startTraining() {
+        currentTraining = null
+        accuracy = []
+        accuracyData = initAccuracyData()
         socket?.emit("start_training", trainingRequest.nRounds, trainingRequest.nSelected)
+        if (clients.length <= 0) getClients()
     }
 
     function disconnect() {
+        console.log("Disconnect")
         socket?.removeAllListeners()
         socket?.disconnect()
+        socket = null;
+        isConnected = socket?.connected || false
+        clear();
     }
 
     function clear() {
         trainingRequest = new TrainingRequest(0, 0)
         currentTraining = null
         accuracy = []
+        accuracyData = initAccuracyData()
+        clients = []
     }
 </script>
 
-<main class="min-h-screen min-w-full flex items-center flex-col gap-3 p-4">
-  <div class="w-full flex justify-center gap-4">
+<main class="h-screen w-screen flex items-center flex-col gap-3 pt-4 py-4 pb-6">
+  <div class="w-full flex justify-center gap-4 max-h-full">
     <Card class="w-[40%] h-fit">
       <CardHeader class="flex justify-between relative">
         <CardTitle>Connect to FL Backend</CardTitle>
@@ -179,102 +197,75 @@
       </CardContent>
     </Card>
     {#if url !== null && isConnected}
-      <Card class="w-[40%] h-fit">
-        <CardHeader class="flex justify-between">
-          <CardTitle>Start Training</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div class="flex flex-col gap-2">
-            <div class="flex gap-2">
-              <Input
-                  type="number"
-                  bind:value={trainingRequest.nRounds}
-                  placeholder="Number of training rounds"
-                  min="0"
-              />
-              <Input
-                  type="number"
-                  bind:value={trainingRequest.nSelected}
-                  placeholder="Necessary Models"
-                  min="0" max={clients.length}
-              />
-            </div>
-            <div class="flex gap-2">
-              <Button on:click={clear}>
-                Clear
-              </Button>
-              <Button
-                  class="ml-auto"
-                  on:click={startTraining}
-                  disabled={
+      <div class="w-[40%] h-fit">
+        <Card>
+          <CardHeader class="flex justify-between">
+            <CardTitle>Start Training</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div class="flex flex-col gap-2">
+              <div class="flex gap-2">
+                <Input
+                    type="number"
+                    bind:value={trainingRequest.nRounds}
+                    placeholder="Number of training rounds"
+                    min="0"
+                />
+                <Input
+                    type="number"
+                    bind:value={trainingRequest.nSelected}
+                    placeholder="Necessary Models"
+                    min="0" max={clients.length}
+                />
+              </div>
+              <div class="flex gap-2">
+                <Button on:click={clear}>
+                  Clear
+                </Button>
+                <Button
+                    class="ml-auto"
+                    on:click={startTraining}
+                    disabled={
                   trainingRequest.nSelected == null || trainingRequest.nRounds == null ||
                   trainingRequest.nSelected <= 0 || trainingRequest.nRounds <= 0
               }>
-                Start
-              </Button>
+                  Start
+                </Button>
+              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
     {/if}
   </div>
 
-  <div class="flex gap-4 w-full">
-    <div class="w-full flex justify-center gap-4">
-      {#if isConnected}
-        <div class="flex gap-4 w-1/3">
-          {#if currentTraining}
-            <Card class="flex flex-col gap-3 w-full">
-              <CardHeader class="relative">
-                <CardTitle>Updates</CardTitle>
-                <Badge class="absolute top-4 right-6">
-                  {accuracy.length}
-                </Badge>
-              </CardHeader>
-              <CardContent class="flex flex-col gap-2">
-                {#each accuracy as accuracyUpdate}
-                  <Card>
-                    {`Accuracy for round ${accuracyUpdate.roundNr} using ${accuracyUpdate.nModels} clients: ${accuracyUpdate.accuracy}`}
-                  </Card>
-                {/each}
-              </CardContent>
-            </Card>
-          {/if}
+  <div class="w-full max-h-full flex justify-center gap-4 overflow-auto">
+    {#if isConnected}
+      <div class="flex gap-4 w-1/2 max-h-full overflow-auto">
+        {#if currentTraining}
+          <UpdatesView data={accuracy}/>
+        {/if}
+      </div>
+      <div class="flex flex-col w-1/2 gap-4 max-h-full overflow-auto">
+        <div class="h-fit">
+          <ClientsView clients={clients}/>
         </div>
-        <div class="flex w-2/3 gap-4 items-start justify-end">
-          {#if currentTraining}
-            <Card class="w-1/2 h-fit">
-              <CardHeader>
-                <CardTitle>Accuracy</CardTitle>
-              </CardHeader>
-              <CardContent class="flex flex-col gap-2">
-                <Line
-                    data={accuracyData}
-                    options="{{responsive: true}}"
-                    bind:chart={chartRef}
-                />
-              </CardContent>
-            </Card>
-          {/if}
-          <Card class="w-1/2 h-fit">
+        {#if currentTraining}
+          <Card class="max-h-full overflow-auto">
             <CardHeader>
-              <CardTitle>Clients</CardTitle>
+              <CardTitle>Accuracy</CardTitle>
             </CardHeader>
             <CardContent class="flex flex-col gap-2">
-              {#if clients.length === 0}
-                There are currently 0 connected clients
-              {:else}
-                {#each clients as client}
-                  <Card>
-                    {`Client ${client.client_id} on port ${client.port}`}
-                  </Card>
-                {/each}
-              {/if}
+              <Line
+                  data={accuracyData}
+                  options="{{responsive: true}}"
+                  bind:chart={chartRef}
+              />
             </CardContent>
           </Card>
-        </div>
-      {/if}
-    </div>
+        {/if}
+      </div>
+    {/if}
   </div>
 
   <Toaster/>
