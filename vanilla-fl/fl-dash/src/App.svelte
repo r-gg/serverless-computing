@@ -158,7 +158,7 @@
     }
 </script>
 
-<main class="h-screen w-screen flex items-center flex-col gap-3 pt-4 py-4 pb-6">
+<main class="h-screen w-screen flex items-center flex-col gap-3 pt-4 px-4 pb-6">
   <div class="w-full flex justify-center gap-4 max-h-full">
     <Card class="w-[40%] h-fit">
       <CardHeader class="flex justify-between relative">
