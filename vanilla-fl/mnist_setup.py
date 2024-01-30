@@ -61,7 +61,8 @@ def _download_emnist_files(url, file_names, save_dir: str):
                 target_file_path = os.path.join(save_dir, os.path.basename(file_name).replace('emnist-digits-', ''))
                 os.rename(extracted_file_path, target_file_path)
             print(f"Extracted: {', '.join([os.path.basename(file_name) for file_name in file_names])}")
-            os.remove(os.path.join(save_dir, 'gzip'))
+            os.removedirs(os.path.join(save_dir, 'gzip'))
+            # os.remove(os.path.join(save_dir, 'gzip'))
     else:
         print(f"Failed to download from {url}")
 
