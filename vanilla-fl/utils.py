@@ -17,18 +17,6 @@ def initialize_mlp_model(model: MLPClassifier, X_dummy, y_dummy):
     return model
 
 
-def split_data(number_of_splits: int, X_train: np.ndarray, y_train: np.ndarray):
-    samples_per_split = int(len(X_train) / number_of_splits)
-    X_train_split = []
-    y_train_split = []
-    # split the data into 'number_of_splits' partitions
-    for i in range(number_of_splits):
-        print(f"Split {i} has {len(X_train[i * samples_per_split:(i + 1) * samples_per_split])} samples")
-        X_train_split.insert(i, X_train[i * samples_per_split:(i + 1) * samples_per_split])
-        y_train_split.insert(i, y_train[i * samples_per_split:(i + 1) * samples_per_split])
-    return X_train_split, y_train_split
-
-
 def evaluate_model(X, y, model: MLPClassifier):
     """Evaluate model on given data."""
     return accuracy_score(y, model.predict(X))
@@ -49,19 +37,6 @@ def create_classifier(hidden_layer_sizes=(50,), max_iter=20, solver='sgd', rando
         random_state=random_state,
         warm_start=warm_start,
     )
-
-
-def copy_params(from_clf: MLPClassifier, to_clf: MLPClassifier):
-    to_clf.coefs_ = from_clf.coefs_
-    to_clf.intercepts_ = from_clf.intercepts_
-    to_clf.n_outputs_ = from_clf.n_outputs_
-    to_clf.n_layers_ = from_clf.n_layers_
-    to_clf.out_activation_ = from_clf.out_activation_
-    to_clf.t_ = from_clf.t_
-    to_clf.best_loss_ = from_clf.best_loss_
-    to_clf.loss_curve_ = from_clf.loss_curve_
-    to_clf._no_improvement_count = 0
-    return to_clf
 
 
 def calculate_stats(client_stats):
@@ -99,8 +74,8 @@ def calculate_stats(client_stats):
     # fill lists
     for stats in client_stats:
         round_nr = stats['round']
-        avg_accuracy_per_round[round_nr-1]['accuracy_per_client'].append(stats['accuracy'])
-        avg_time_per_round[round_nr-1]['time_per_client'].append(stats['time'])
+        avg_accuracy_per_round[round_nr - 1]['accuracy_per_client'].append(stats['accuracy'])
+        avg_time_per_round[round_nr - 1]['time_per_client'].append(stats['time'])
 
     # calculate averages
     for i in range(max_round):
