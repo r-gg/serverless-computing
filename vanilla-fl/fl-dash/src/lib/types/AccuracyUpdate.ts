@@ -1,19 +1,19 @@
 export class AccuracyUpdate {
     accuracy: number;
-    roundNr: number;
-    nModels: number;
+    round: number;
+    accumulated_time: number;
 
     constructor(
         accuracy: number,
-        roundNr: number,
-        nModels: number,
+        round: number,
+        accumulated_time: number,
     ) {
         this.accuracy = accuracy
-        this.roundNr = roundNr
-        this.nModels = nModels
+        this.round = round
+        this.accumulated_time = accumulated_time
     }
 
     toString(): string {
-        return `Accuracy for round ${this.roundNr} using ${this.nModels} clients: ${this.accuracy}`
+        return `Accuracy for round ${this.round} in ${this.accumulated_time}: ${this.accuracy}`
     }
 }

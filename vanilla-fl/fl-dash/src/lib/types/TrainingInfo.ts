@@ -1,7 +1,12 @@
 export class TrainingInfo {
+    n_rounds: number;
+    n_selected: number;
+
     constructor(
-        private n_rounds: number,
-        private n_selected: number,
+        n_rounds: number,
+        n_selected: number,
     ) {
+        this.n_rounds = n_rounds;
+        this.n_selected = n_selected;
     }
 }

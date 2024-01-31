@@ -3,7 +3,6 @@ import pickle
 import random
 import threading
 import time
-from datetime import datetime
 from io import BytesIO
 
 import requests
@@ -87,12 +86,15 @@ class FederatedLearningServer:
             client_id = args['client_id']
             accuracy = float(request.form.get('accuracy'))
             delta_time = float(request.form.get('time'))
-            self.client_stats.append({
+            client_update = {
                 'client_id': client_id,
                 'round': self.round_nr,
-                'accuracy': accuracy,
+                'accuracy': round(accuracy, 4),
                 'time': delta_time
-            })
+            }
+            #TODO: Only send the client models that have been chosen for merging
+            self.broadcast_message('update_client', client_update)
+            self.client_stats.append(client_update)
             serialized_model = request.files['model'].read()
             client = [client for client in self.clients if client['client_id'] == client_id][0]
             self.app.logger.info(
@@ -104,6 +106,7 @@ class FederatedLearningServer:
 
             if len(self.current_models) >= self.n_selected and not self.in_merging:
                 self.in_merging = True
+
                 n_models = len(self.current_models)
                 for client in self.clients:
                     threading.Thread(target=self.stop_training_round, args=(client,)).start()
@@ -115,16 +118,13 @@ class FederatedLearningServer:
 
                 accuracy = utils.evaluate_model(self.X_test, self.y_test, self.global_model)
                 self.app.logger.info(f"Accuracy for round {self.round_nr} using {n_models} clients: {accuracy}")
-                self.broadcast_message('update_accuracy', {
-                    'roundNr': self.round_nr,
-                    'nModels': n_models,
-                    'accuracy': accuracy
-                })
-                self.server_stats.append({
+                update = {
                     'round': self.round_nr,
-                    'accuracy': accuracy,
+                    'accuracy': round(accuracy, 4),
                     'accumulated_time': time.time() - self.start_time
-                })
+                }
+                self.broadcast_message('update_accuracy', update)
+                self.server_stats.append(update)
                 if self.round_nr < self.training_rounds:
                     self.start_training_round()
                     self.in_merging = False
@@ -172,8 +172,8 @@ class FederatedLearningServer:
         self.app.logger.info(
             f"Training started for {self.training_rounds} rounds with {self.n_selected} selected clients per round")
         self.broadcast_message('training_started', {
-            'nRounds': self.training_rounds,
-            'nSelected': self.n_selected
+            'n_rounds': self.training_rounds,
+            'n_selected': self.n_selected
         })
         thread = threading.Thread(target=self.start_training_round)
         thread.start()

@@ -24,6 +24,7 @@
     } from 'chart.js';
     import UpdatesView from "$lib/UpdatesView.svelte";
     import ClientsView from "$lib/ClientsView.svelte";
+    import type {ClientUpdate} from "$lib/types/ClientUpdate";
 
     ChartJS.register(
         Title,
@@ -51,6 +52,7 @@
     let isConnected: boolean = false;
     let chartRef: any;
     let accuracyData = initAccuracyData()
+    let clientUpdatesPerRound: Map<number, ClientUpdate[]> = initClientUpdatesPerRound();
 
     function connect(): void {
         if (!url) {
@@ -73,19 +75,32 @@
         }
 
         socket.on("update_accuracy", (event: { data: AccuracyUpdate }) => {
-            console.log(event)
-            accuracy.push(event.data)
-            accuracy = accuracy
+            console.log(event.data)
+            accuracy = [...accuracy, event.data];
             addDataToChart(chartRef, accuracy.length, event.data.accuracy)
         });
 
+        socket.on("update_client", (event: { data: ClientUpdate }) => {
+            const clientUpdate = event.data
+            console.log(clientUpdate)
+            const round = clientUpdate.round
+            if (clientUpdatesPerRound.has(round)) {
+                clientUpdatesPerRound.get(round)?.push(
+                    clientUpdate
+                )
+            } else {
+                clientUpdatesPerRound.set(round, [clientUpdate])
+            }
+            clientUpdatesPerRound = clientUpdatesPerRound
+        })
+
         socket.on("training_started", (event: { data: TrainingInfo }) => {
-            console.log(event)
+            console.log(event.data)
             currentTraining = event.data
         });
 
         socket.on("client_registered", (event: { data: Client }) => {
-            console.log(event)
+            console.log(event.data)
             clients.push(event.data)
             clients = clients
         });
@@ -132,10 +147,15 @@
         }
     }
 
+    function initClientUpdatesPerRound() {
+        return new Map<number, ClientUpdate[]>()
+    }
+
     function startTraining() {
         currentTraining = null
         accuracy = []
         accuracyData = initAccuracyData()
+        clientUpdatesPerRound = initClientUpdatesPerRound()
         socket?.emit("start_training", trainingRequest.nRounds, trainingRequest.nSelected)
         if (clients.length <= 0) getClients()
     }
@@ -145,7 +165,7 @@
         socket?.removeAllListeners()
         socket?.disconnect()
         socket = null;
-        isConnected = socket?.connected || false
+        isConnected = false
         clear();
     }
 
@@ -155,6 +175,7 @@
         accuracy = []
         accuracyData = initAccuracyData()
         clients = []
+        clientUpdatesPerRound = initClientUpdatesPerRound()
     }
 </script>
 
@@ -243,7 +264,11 @@
     {#if isConnected}
       <div class="flex gap-4 w-1/2 max-h-full overflow-auto">
         {#if currentTraining}
-          <UpdatesView data={accuracy}/>
+          <UpdatesView
+              currentTraining={currentTraining}
+              data={accuracy}
+              clientUpdatesPerRound={clientUpdatesPerRound}
+          />
         {/if}
       </div>
       <div class="flex flex-col w-1/2 gap-4 max-h-full overflow-auto">

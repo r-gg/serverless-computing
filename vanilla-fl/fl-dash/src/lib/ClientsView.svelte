@@ -1,6 +1,7 @@
 <script lang="ts">
     import {Card, CardContent, CardHeader, CardTitle} from "$lib/components/ui/card/index.js";
     import {Client} from "$lib/types/Client";
+    import ClientCard from "$lib/components/ClientCard.svelte";
 
     export let clients: Client[];
 </script>
@@ -9,14 +10,12 @@
   <CardHeader>
     <CardTitle>Clients</CardTitle>
   </CardHeader>
-  <CardContent class="flex flex-col gap-2">
+  <CardContent class="flex flex-wrap gap-2">
     {#if clients.length === 0}
       There are currently 0 connected clients
     {:else}
       {#each clients as client}
-        <Card>
-          {`Client ${client.client_id} on port ${client.port}`}
-        </Card>
+        <ClientCard client={client}/>
       {/each}
     {/if}
   </CardContent>
