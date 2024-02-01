@@ -174,7 +174,6 @@
         currentTraining = null
         accuracy = []
         accuracyData = initAccuracyData()
-        clients = []
         clientUpdatesPerRound = initClientUpdatesPerRound()
     }
 </script>
