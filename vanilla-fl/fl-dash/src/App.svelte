@@ -25,6 +25,8 @@
     import UpdatesView from "$lib/UpdatesView.svelte";
     import ClientsView from "$lib/ClientsView.svelte";
     import type {ClientUpdate} from "$lib/types/ClientUpdate";
+    import {ModeWatcher} from "mode-watcher";
+    import ThemeToggle from "$lib/components/ThemeToggle.svelte";
 
     ChartJS.register(
         Title,
@@ -179,6 +181,10 @@
 </script>
 
 <main class="h-screen w-screen flex items-center flex-col gap-3 pt-4 px-4 pb-6">
+  <ThemeToggle
+      class="absolute top-4 right-4"
+  />
+
   <div class="w-full flex justify-center gap-4 max-h-full">
     <Card class="w-[40%] h-fit">
       <CardHeader class="flex justify-between relative">
@@ -293,4 +299,5 @@
   </div>
 
   <Toaster/>
+  <ModeWatcher/>
 </main>
